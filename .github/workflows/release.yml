@@ -62,6 +62,8 @@ jobs:
     permissions:
       contents: read
       packages: write
+    env:
+      DOCKER_BUILD_RECORD_UPLOAD: "false"   # no build-record artifact (see the publish job)
     steps:
       - uses: actions/checkout@v4
         with:
@@ -144,10 +146,16 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ env.TAG }}
+      # Download by name: docker/build-push-action also uploads a ".dockerbuild"
+      # build record as an artifact, which download-artifact cannot extract.
       - uses: actions/download-artifact@v4
         with:
+          name: python-dist
           path: artifacts
-          merge-multiple: true
+      - uses: actions/download-artifact@v4
+        with:
+          name: windows
+          path: artifacts
       - name: Linux installer pointing at this repository (also for forks)
         run: sed "s|^DEFAULT_REPO=.*|DEFAULT_REPO=\"${GITHUB_REPOSITORY}\"|" deploy/linux/install.sh > artifacts/install.sh
       - name: Checksums
