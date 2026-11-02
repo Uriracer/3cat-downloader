@@ -385,7 +385,18 @@ def _serve(args: argparse.Namespace, log_file: Optional[Path], instance: Any, da
                                      name="uvicorn", daemon=True)
     server_thread.start()
 
+    # Log the configuration right away (before the health wait), so it is in
+    # the log even if the process is stopped while still starting.
     ffmpeg, ffmpeg_error = find_ffmpeg()
+    if runtime.server:
+        lan = ", ".join(f"http://{ip}:{port}/" for ip in _lan_addresses()) or url
+    else:
+        lan = url
+    log.info("3Cat Downloader %s — mode %s, %s | dades: %s | descàrregues: %s | "
+             "ffmpeg: %s | inici de sessió: %s",
+             __version__, "servidor" if runtime.server else "escriptori", lan, data_dir,
+             store.get().download_dir, ffmpeg or f"NO TROBAT ({ffmpeg_error})",
+             "obligatori" if runtime.auth_required else "desactivat")
     exit_code = 0
     try:
         if not _wait_for_health(connect, port, server_thread):
@@ -393,16 +404,7 @@ def _serve(args: argparse.Namespace, log_file: Optional[Path], instance: Any, da
                 log.error("El servidor no ha arrencat. Consulta el registre: %s", log_file or "(consola)")
                 exit_code = 1
         else:
-            settings = store.get()
-            if runtime.server:
-                lan = ", ".join(f"http://{ip}:{port}/" for ip in _lan_addresses()) or url
-            else:
-                lan = url
-            log.info("3Cat Downloader %s a punt — mode %s, %s | dades: %s | descàrregues: %s | "
-                     "ffmpeg: %s | inici de sessió: %s",
-                     __version__, "servidor" if runtime.server else "escriptori", lan, data_dir,
-                     settings.download_dir, ffmpeg or f"NO TROBAT ({ffmpeg_error})",
-                     "obligatori" if runtime.auth_required else "desactivat")
+            log.info("Servidor a punt a %s", lan)
             _show_ui(url, args, runtime.server, server_thread)
     except KeyboardInterrupt:
         pass
