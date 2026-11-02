@@ -65,7 +65,7 @@ ISCC.exe /DMyAppVersion=0.2.0 deploy\windows\3CatDownloader.iss
 
 3. GitHub Actions (`.github/workflows/release.yml`) comprova que l'etiqueta coincideix amb la
    versió i passa les proves. Després publica:
-   - la imatge `ghcr.io/<usuari>/3cat-downloader` (amd64 + arm64), amb les etiquetes `0.2.0`,
+   - la imatge `ghcr.io/uriracer/3cat-downloader` (amd64 + arm64), amb les etiquetes `0.2.0`,
      `0.2` i `latest`;
    - l'instal·lador i el zip de Windows, el wheel i l'sdist, i `install.sh` amb el repositori
      ja omplert, tot amb `SHA256SUMS`, a la pàgina de la versió.

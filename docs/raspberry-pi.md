@@ -18,8 +18,8 @@ imatge Docker.
 curl -fsSL https://get.docker.com | sudo sh
 sudo usermod -aG docker "$USER"   # tanca la sessió i torna a entrar
 mkdir -p ~/3cat-downloader && cd ~/3cat-downloader
-curl -fsSLO https://raw.githubusercontent.com/<usuari>/3cat-downloader/main/deploy/docker-compose.yml
-nano docker-compose.yml           # PUID/PGID (ordre «id»), carpeta de vídeos i <usuari>
+curl -fsSLO https://raw.githubusercontent.com/Uriracer/3cat-downloader/main/deploy/docker-compose.yml
+nano docker-compose.yml           # PUID/PGID (ordre «id») i carpeta de vídeos
 docker compose up -d
 ```
 
@@ -30,7 +30,7 @@ transcodificació de Jellyfin va justa: millor reproduir sense transcodificar.
 ## Opció B: instal·lació nativa (sense Docker)
 
 ```bash
-curl -fsSL https://github.com/<usuari>/3cat-downloader/releases/latest/download/install.sh \
+curl -fsSL https://github.com/Uriracer/3cat-downloader/releases/latest/download/install.sh \
   | sudo bash -s -- --download-dir /srv/media/3cat
 ```
 

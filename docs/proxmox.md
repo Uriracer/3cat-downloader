@@ -58,10 +58,10 @@ Dins del LXC:
 ```bash
 apt update && apt install -y curl git
 curl -fsSL https://get.docker.com | sh
-git clone https://github.com/<usuari>/3cat-downloader.git /opt/3cat-downloader
+git clone https://github.com/Uriracer/3cat-downloader.git /opt/3cat-downloader
 cd /opt/3cat-downloader/deploy/arr-stack
 cp .env.example .env
-nano .env        # DATA_ROOT=/data, CONFIG_ROOT=/opt/media/config, GHCR_OWNER=<usuari>
+nano .env        # DATA_ROOT=/data, CONFIG_ROOT=/opt/media/config, GHCR_OWNER=uriracer
 docker compose up -d
 ```
 
@@ -89,7 +89,7 @@ de Proxmox (community-scripts). En aquest cas, crea un altre LXC Debian per a 3C
 Downloader i instal·la'l amb [install.sh](linux.md):
 
 ```bash
-curl -fsSL https://github.com/<usuari>/3cat-downloader/releases/latest/download/install.sh \
+curl -fsSL https://github.com/Uriracer/3cat-downloader/releases/latest/download/install.sh \
   | bash -s -- --download-dir /data/downloads/3cat
 ```
 

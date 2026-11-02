@@ -1,14 +1,13 @@
 # 3Cat Downloader — exemple mínim amb Docker Compose.
 #
-#   1. Canvia <usuari> pel propietari del repositori de GitHub (o construeix la
-#      imatge tu mateix: substitueix "image:" per "build: ..").
+#   1. Si vols construir la imatge tu mateix, substitueix "image:" per "build: ..".
 #   2. Ajusta PUID/PGID (ordre «id» a l'amfitrió) i la carpeta de vídeos.
 #   3. docker compose up -d   →   obre http://<ip-del-servidor>:8765/
 #
 # La primera vegada que hi entris et demanarà que creïs una contrasenya.
 services:
   3cat-downloader:
-    image: ghcr.io/<usuari>/3cat-downloader:latest
+    image: ghcr.io/uriracer/3cat-downloader:latest
     container_name: 3cat-downloader
     environment:
       PUID: "1000"

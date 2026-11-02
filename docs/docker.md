@@ -1,6 +1,6 @@
 # Docker
 
-La imatge `ghcr.io/<usuari>/3cat-downloader` funciona a `linux/amd64` (mini-PC, NAS,
+La imatge `ghcr.io/uriracer/3cat-downloader` funciona a `linux/amd64` (mini-PC, NAS,
 servidors) i `linux/arm64` (Raspberry Pi 4/5 amb sistema de 64 bits).
 
 | Etiqueta | Què és |
@@ -15,7 +15,7 @@ Fitxer d'exemple: [deploy/docker-compose.yml](../deploy/docker-compose.yml).
 ```yaml
 services:
   3cat-downloader:
-    image: ghcr.io/<usuari>/3cat-downloader:latest
+    image: ghcr.io/uriracer/3cat-downloader:latest
     container_name: 3cat-downloader
     environment:
       PUID: "1000"
@@ -69,7 +69,7 @@ Les descàrregues que estaven a mitges es reprenen soles.
 ## Construir la imatge tu mateix
 
 ```bash
-git clone https://github.com/<usuari>/3cat-downloader.git
+git clone https://github.com/Uriracer/3cat-downloader.git
 cd 3cat-downloader
 docker build -t 3cat-downloader .
 ```

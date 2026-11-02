@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # 3Cat Downloader — instal·lador natiu per a Debian, Ubuntu i Raspberry Pi OS (systemd).
 #
-#   Instal·lar/actualitzar:  curl -fsSL https://github.com/<usuari>/3cat-downloader/releases/latest/download/install.sh | sudo bash
+#   Instal·lar/actualitzar:  curl -fsSL https://github.com/Uriracer/3cat-downloader/releases/latest/download/install.sh | sudo bash
 #   Des del codi font:       sudo ./deploy/linux/install.sh --from-source .
 #   Desinstal·lar:           sudo ./install.sh --uninstall [--purge]
 #
@@ -9,8 +9,8 @@
 set -euo pipefail
 
 APP="3cat-downloader"
-# The release workflow replaces this placeholder with "<owner>/3cat-downloader".
-DEFAULT_REPO="__TRESDL_REPO__"
+# GitHub repository with the releases (the release workflow sets it to the publishing repo).
+DEFAULT_REPO="Uriracer/3cat-downloader"
 REPO="${TRESDL_REPO:-$DEFAULT_REPO}"
 
 PREFIX="/opt/$APP"

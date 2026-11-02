@@ -148,8 +148,8 @@ jobs:
         with:
           path: artifacts
           merge-multiple: true
-      - name: Linux installer with this repository filled in
-        run: sed "s|__TRESDL_REPO__|${GITHUB_REPOSITORY}|" deploy/linux/install.sh > artifacts/install.sh
+      - name: Linux installer pointing at this repository (also for forks)
+        run: sed "s|^DEFAULT_REPO=.*|DEFAULT_REPO=\"${GITHUB_REPOSITORY}\"|" deploy/linux/install.sh > artifacts/install.sh
       - name: Checksums
         working-directory: artifacts
         run: sha256sum ./* > SHA256SUMS && cat SHA256SUMS

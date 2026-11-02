@@ -26,6 +26,11 @@ classifiers = [
     "Topic :: Multimedia :: Video",
 ]
 
+[project.urls]
+Homepage = "https://github.com/Uriracer/3cat-downloader"
+Documentation = "https://github.com/Uriracer/3cat-downloader#readme"
+Issues = "https://github.com/Uriracer/3cat-downloader/issues"
+
 [project.optional-dependencies]
 desktop = ["pywebview>=5.0"]
 dev = ["pywebview>=5.0", "pyinstaller>=6.6", "pytest>=8.0", "build>=1.2"]
