@@ -25,6 +25,12 @@ Every endpoint requires the API key (`apikey` query parameter, as Sonarr/Radarr 
 
 * `t=caps`: `search` (q), `tv-search` (q, season, ep), `movie-search` (q); categories
   2000/2030/2040 and 5000/5030/5040.
+* `t=tvsearch&tvdbid=…|tvmazeid=…` (Sonarr tries ids first): `lookup.py` asks TVmaze for the
+  original name, official-site slug and akas (`/lookup/shows?thetvdb=`), and SkyHook for
+  Sonarr's title; the programme must **equal** one of those names. Releases are named with
+  Sonarr's title (`Genesis.2026.S01E01…`) and carry `<newznab:attr name="tvdbid">`, which
+  Sonarr's `ParsingService.FindSeries` accepts when the title differs. Cached 24 h
+  (failures 15 min); without TVmaze Sonarr falls back to the title search.
 * `t=tvsearch&q=…[&season=…][&ep=…]`: the programme whose title **equals** `q`
   (accent/punctuation-insensitive, trailing year ignored) — never a fuzzy match, because the
   release is named after `q`. Daily series: `season=YYYY&ep=MM/DD` matches the air date.

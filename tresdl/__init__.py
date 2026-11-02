@@ -1,3 +1,3 @@
 """3Cat Downloader: download whole seasons or series from 3cat.cat."""
 
-__version__ = "0.3.0"
+__version__ = "0.3.1"

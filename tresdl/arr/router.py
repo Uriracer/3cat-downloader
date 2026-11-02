@@ -43,9 +43,10 @@ def _int(value: Optional[str], default: int = 0) -> int:
 
 
 def create_arr_router(client: Any, manager: Any, settings_getter: Callable[[], Any],
-                      *, data_dir: Any = None) -> APIRouter:
+                      *, data_dir: Any = None, lookup: Any = None) -> APIRouter:
     router = APIRouter(include_in_schema=False)
-    indexer = Indexer(client)
+    indexer = Indexer(client, lookup)
+    router.indexer = indexer  # type: ignore[attr-defined]  # for tests
     sab = SabnzbdService(client, manager, settings_getter, data_dir=data_dir)
     router.sab = sab  # type: ignore[attr-defined]  # for tests
 
@@ -65,11 +66,15 @@ def create_arr_router(client: Any, manager: Any, settings_getter: Callable[[], A
         cats = {int(c) for c in (params.get("cat") or "").replace(" ", "").split(",") if c.isdigit()}
         wants_movies = (t == "movie") or (bool(cats) and all(2000 <= c < 3000 for c in cats))
         q = (params.get("q") or "").strip()
+        tvdb_id, tvmaze_id = _int(params.get("tvdbid")) or None, _int(params.get("tvmazeid")) or None
         offset, limit = _int(params.get("offset")), _int(params.get("limit"), 100) or 100
         try:
             if t not in ("search", "tvsearch", "movie"):
                 return _xml(rl.error_xml(202, f"No such function ({t})"))
-            if not q:
+            if t == "tvsearch" and (tvdb_id or tvmaze_id):
+                found = await run_in_threadpool(indexer.tv_search, q, params.get("season"), params.get("ep"),
+                                                tvdb_id, tvmaze_id)
+            elif not q:
                 found = await run_in_threadpool(indexer.rss, wants_movies)
             elif wants_movies:
                 found = await run_in_threadpool(indexer.movie_search, q)

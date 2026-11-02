@@ -2,6 +2,14 @@
 
 Format basat en [Keep a Changelog](https://keepachangelog.com/ca/1.1.0/); versions [SemVer](https://semver.org/lang/ca/).
 
+## [0.3.1] - 2026-11-02
+
+### Corregit
+- Sonarr no trobava les sèries que TheTVDB anomena en anglès (per exemple *Genesis (2026)*,
+  que a 3cat és *Gènesi*). L'indexador accepta ara cerques per identificador de TheTVDB i
+  TVmaze, troba el nom original a TVmaze i retorna els resultats amb el títol i
+  l'identificador que Sonarr espera.
+
 ## [0.3.0] - 2026-11-02
 
 ### Afegit

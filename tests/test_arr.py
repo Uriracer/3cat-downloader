@@ -30,6 +30,8 @@ def ep(vid: int, season: Optional[int], number: Optional[int], title: str, *, pr
 
 
 MERLI = [ep(1, 1, 1, "Els peripatètics"), ep(2, 1, 2, "Plató"), ep(3, 2, 1, "Maquiavel")]
+GENESI = [ep(20 + n, 1, n, f"Capítol {n}", program_id=76716, series="Gènesi", date="2026-09-21")
+          for n in (1, 2, 3)]
 TN = [ep(10, None, None, "Telenotícies migdia", program_id=777, series="Telenotícies", date="2026-11-02")]
 FILMS = [Episode(id=50, program_id=0, program_title="Monster house", title="Monster house",
                  raw_title="Monster house", air_date="2026-10-24", duration_seconds=5175)]
@@ -38,9 +40,10 @@ FILMS = [Episode(id=50, program_id=0, program_title="Monster house", title="Mons
 class Client:
     def __init__(self) -> None:
         self.programs = [Program(id=54076, slug="merli", title="Merlí"),
+                         Program(id=76716, slug="genesi", title="Gènesi"),
                          Program(id=99, slug="merli-sapere-aude", title="Merlí. Sapere aude"),
                          Program(id=777, slug="telenoticies", title="Telenotícies")]
-        self.episodes = {54076: MERLI, 99: [ep(90, 1, 1, "Altres", program_id=99, series="Merlí. Sapere aude")],
+        self.episodes = {54076: MERLI, 76716: GENESI, 99: [ep(90, 1, 1, "Altres", program_id=99, series="Merlí. Sapere aude")],
                          777: TN}
 
     def search(self, query: str, limit: int = 30) -> list[Program]:
@@ -60,7 +63,7 @@ class Client:
         return copy.deepcopy(MERLI[:1] + TN)
 
     def get_episode(self, video_id: int) -> Episode:
-        for e in MERLI + TN + FILMS:
+        for e in MERLI + GENESI + TN + FILMS:
             if e.id == video_id:
                 return copy.deepcopy(e)
         raise LookupError(video_id)
@@ -103,6 +106,33 @@ class Manager:
 
     def remove(self, job_id):
         return self.jobs_by_id.pop(job_id, None) is not None
+
+
+TVMAZE = {   # what TVmaze / SkyHook answer, keyed by URL
+    "https://api.tvmaze.com/lookup/shows?thetvdb=480821": {
+        "id": 94234, "name": "Gènesi", "officialSite": "https://www.3cat.cat/3cat/genesi/",
+        "externals": {"thetvdb": 480821}},
+    "https://api.tvmaze.com/shows/94234": {
+        "id": 94234, "name": "Gènesi", "officialSite": "https://www.3cat.cat/3cat/genesi/",
+        "externals": {"thetvdb": 480821}},
+    "https://api.tvmaze.com/shows/94234/akas": [],
+    "https://skyhook.sonarr.tv/v1/tvdb/shows/en/480821": {"title": "Genesis (2026)"},
+    "https://api.tvmaze.com/lookup/shows?thetvdb=82712": {"id": 1, "name": "Genesis", "officialSite": ""},
+    "https://api.tvmaze.com/shows/1/akas": [],
+    "https://skyhook.sonarr.tv/v1/tvdb/shows/en/82712": {"title": "Genesis (2005)"},
+}
+
+
+def fake_fetch(url: str, params: dict):
+    full = url + ("?" + "&".join(f"{k}={v}" for k, v in params.items()) if params else "")
+    if full not in TVMAZE:
+        raise AssertionError(f"unexpected request {full}")
+    return copy.deepcopy(TVMAZE[full])
+
+
+@pytest.fixture(autouse=True)
+def _no_network(monkeypatch):
+    monkeypatch.setattr("tresdl.arr.lookup._default_fetch", fake_fetch)
 
 
 @pytest.fixture()
@@ -165,7 +195,7 @@ def test_token_and_nzb_roundtrip() -> None:
 def test_caps_and_api_key(arr) -> None:
     http = arr["http"]
     caps = ET.fromstring(newznab(http, t="caps"))
-    assert caps.find("searching/tv-search").get("supportedParams") == "q,season,ep"
+    assert caps.find("searching/tv-search").get("supportedParams") == "q,season,ep,tvdbid,tvmazeid"
     assert {c.get("id") for c in caps.iter("category")} == {"2000", "5000"}
     bad = http.get("/arr/newznab/api", params={"t": "caps", "apikey": "dolenta"})
     assert ET.fromstring(bad.text).get("code") == "100"
@@ -186,6 +216,42 @@ def test_tvsearch_is_strict_and_season_has_pack(arr) -> None:
     assert not any("Altres" in t for t in titles)                          # "Merlí. Sapere aude" not leaked
     assert items(newznab(http, t="tvsearch", q="Merl")) == []               # partial title: nothing
     assert len(items(newznab(http, t="tvsearch", q="Merlí (2015)"))) == 3   # year suffix ignored
+
+
+def test_tvsearch_by_tvdbid_uses_original_title(arr) -> None:
+    """Sonarr calls it "Genesis (2026)" (TheTVDB), 3cat "Gènesi": found through TVmaze."""
+    http = arr["http"]
+    assert items(newznab(http, t="tvsearch", q="Genesis 2026", season="1")) == []   # title only: no match
+    found = items(newznab(http, t="tvsearch", tvdbid="480821", season="1", cat="5030,5040"))
+    assert [f["title"] for f in found] == [
+        "Genesis.2026.S01.CATALAN.1080p.WEB-DL.AAC.H264-3CAT",
+        *[f"Genesis.2026.S01E0{n}.CATALAN.1080p.WEB-DL.AAC.H264-3CAT" for n in (1, 2, 3)]]
+    assert {f["tvdbid"] for f in found} == {"480821"}
+    one = items(newznab(http, t="tvsearch", tvmazeid="94234", season="1", ep="2"))
+    assert [(f["title"].split(".CATALAN")[0], f["tvdbid"]) for f in one] == [("Genesis.2026.S01E02", "480821")]
+    assert items(newznab(http, t="tvsearch", tvdbid="82712", season="1", ep="1")) == []   # not on 3cat
+    # Merlí by title still works and carries no id.
+    assert "tvdbid" not in items(newznab(http, t="tvsearch", q="Merlí", season="1", ep="1"))[0]
+
+
+def test_series_lookup_caches_and_survives_failures() -> None:
+    from tresdl.arr.lookup import SeriesLookup
+    calls: list[str] = []
+
+    def fetch(url, params):
+        calls.append(url)
+        return fake_fetch(url, params)
+
+    lookup = SeriesLookup(fetch)
+    info = lookup.find(tvdb_id=480821)
+    assert info.names == ["Gènesi", "genesi"] and info.sonarr_title == "Genesis (2026)"
+    assert info.tvmaze_id == 94234 and lookup.find(tvdb_id=480821) is info and len(calls) == 3
+    assert lookup.find() is None
+
+    def broken(url, params):
+        raise OSError("offline")
+
+    assert SeriesLookup(broken).find(tvdb_id=480821) is None
 
 
 def test_daily_and_rss(arr) -> None:

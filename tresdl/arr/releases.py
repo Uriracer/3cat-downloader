@@ -182,6 +182,7 @@ class Release:
     description: str = ""
     comments: str = ""
     guid: str = ""
+    tvdb_id: Optional[int] = None         # lets Sonarr match it when the titles differ
 
 
 def _rfc822(iso_date: Optional[str]) -> str:
@@ -204,6 +205,8 @@ def rss_feed(releases: list[Release], *, base_url: str, api_key: str,
             attrs.append(("season", str(rel.season)))
         if rel.episode is not None:
             attrs.append(("episode", str(rel.episode)))
+        if rel.tvdb_id:
+            attrs.append(("tvdbid", str(rel.tvdb_id)))
         attrs.append(("language", "Catalan"))
         attr_xml = "".join(f'<newznab:attr name="{n}" value="{escape(v)}"/>' for n, v in attrs)
         items.append(
@@ -241,7 +244,7 @@ def caps_xml() -> str:
         '<registration available="no" open="no"/>'
         "<searching>"
         '<search available="yes" supportedParams="q"/>'
-        '<tv-search available="yes" supportedParams="q,season,ep"/>'
+        '<tv-search available="yes" supportedParams="q,season,ep,tvdbid,tvmazeid"/>'
         '<movie-search available="yes" supportedParams="q"/>'
         "</searching>"
         "<categories>"

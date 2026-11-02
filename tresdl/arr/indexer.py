@@ -16,6 +16,7 @@ from typing import Any, Optional, Protocol
 
 from ..models import Episode
 from . import releases as rl
+from .lookup import SeriesLookup
 from .releases import Release, Token
 
 log = logging.getLogger(__name__)
@@ -67,8 +68,9 @@ def _permalink(ep: Episode) -> str:
 
 
 class Indexer:
-    def __init__(self, client: IndexClient) -> None:
+    def __init__(self, client: IndexClient, lookup: Optional[SeriesLookup] = None) -> None:
         self._client = client
+        self._lookup = lookup or SeriesLookup()
         self._lock = threading.Lock()
         self._heights: dict[int, tuple[float, Optional[int]]] = {}
 
@@ -105,7 +107,8 @@ class Indexer:
                 found.append(prog)
         return found
 
-    def _episode_release(self, ep: Episode, series: str, height: Optional[int]) -> Optional[Release]:
+    def _episode_release(self, ep: Episode, series: str, height: Optional[int],
+                         tvdb_id: Optional[int] = None) -> Optional[Release]:
         season, episode = _numbers(ep)
         if (season is None or episode is None) and not ep.air_date:
             return None
@@ -116,11 +119,11 @@ class Indexer:
             title=name, token=token, size=rl.estimate_size(ep.duration_seconds, height),
             category=rl.CAT_TV_HD if rl.bucket(height) >= 720 else rl.CAT_TV_SD,
             published=ep.air_date, season=season, episode=episode,
-            description=ep.description[:300], comments=_permalink(ep), guid=_guid(token),
+            description=ep.description[:300], comments=_permalink(ep), guid=_guid(token), tvdb_id=tvdb_id,
         )
 
     def _pack_release(self, episodes: list[Episode], series: str, season: int,
-                      height: Optional[int]) -> Release:
+                      height: Optional[int], tvdb_id: Optional[int] = None) -> Release:
         name = rl.season_pack_name(series, season, height)
         names = {}
         for ep in episodes:
@@ -134,13 +137,39 @@ class Indexer:
             title=name, token=token, size=size,
             category=rl.CAT_TV_HD if rl.bucket(height) >= 720 else rl.CAT_TV_SD,
             published=latest, season=season,
-            description=f"{len(episodes)} capítols", guid=_guid(token),
+            description=f"{len(episodes)} capítols", guid=_guid(token), tvdb_id=tvdb_id,
         )
 
     # ------------------------------------------------------------ searches
-    def tv_search(self, query: str, season: Optional[str] = None, ep: Optional[str] = None) -> list[Release]:
-        """Sonarr ``t=tvsearch``: episodes (and a season pack) of the programme named ``query``."""
+    def _programmes_by_id(self, tvdb_id: Optional[int], tvmaze_id: Optional[int]) -> tuple[list[Any], str, Optional[int]]:
+        """Programmes of a TheTVDB/TVmaze series: (programmes, Sonarr's title, TheTVDB id)."""
+        info = self._lookup.find(tvdb_id=tvdb_id, tvmaze_id=tvmaze_id)
+        if info is None:
+            return [], "", tvdb_id
+        for name in info.names:
+            found = self._programmes(name)
+            if found:
+                return found, info.sonarr_title, tvdb_id or info.tvdb_id
+        log.info("La sèrie %s (TheTVDB %s) no és a 3cat", info.names, tvdb_id or info.tvdb_id)
+        return [], info.sonarr_title, tvdb_id or info.tvdb_id
+
+    def tv_search(self, query: str, season: Optional[str] = None, ep: Optional[str] = None,
+                  tvdb_id: Optional[int] = None, tvmaze_id: Optional[int] = None) -> list[Release]:
+        """Sonarr ``t=tvsearch``: episodes (and a season pack) of the programme named ``query``.
+
+        With ``tvdbid``/``tvmazeid`` the programme is found by its original
+        name (the 3cat one), the releases are named with Sonarr's title and
+        carry the TheTVDB id, so Sonarr matches them even when the titles differ.
+        """
         title, _year = split_year(query)
+        programmes: list[Any] = []
+        known_id: Optional[int] = None
+        if tvdb_id or tvmaze_id:
+            programmes, sonarr_title, known_id = self._programmes_by_id(tvdb_id, tvmaze_id)
+            if programmes:
+                title = sonarr_title or query.strip() or programmes[0].title
+        if not programmes and title:
+            programmes = self._programmes(title) or self._programmes(query)
         season_n = int(season) if season and season.isdigit() else None
         daily = None
         if season_n and season_n > 1900 and ep and "/" in ep:   # daily: season=2026, ep=11/02
@@ -150,7 +179,7 @@ class Indexer:
         ep_n = int(ep) if ep and ep.isdigit() else None
 
         results: list[Release] = []
-        for prog in self._programmes(title) or self._programmes(query):
+        for prog in programmes:
             episodes = self._client.list_episodes(prog.id)
             if not episodes:
                 continue
@@ -162,13 +191,13 @@ class Indexer:
                           if (season_n is None or _numbers(e)[0] == season_n)
                           and (ep_n is None or _numbers(e)[1] == ep_n)]
             for item in chosen:
-                rel = self._episode_release(item, title, height)
+                rel = self._episode_release(item, title, height, known_id)
                 if rel:
                     results.append(rel)
             if season_n is not None and ep_n is None and not daily:
                 numbered = [e for e in chosen if _numbers(e)[1] is not None]
                 if len(numbered) >= 2:
-                    results.insert(0, self._pack_release(numbered, title, season_n, height))
+                    results.insert(0, self._pack_release(numbered, title, season_n, height, known_id))
         return results[:MAX_RESULTS]
 
     def movie_search(self, query: str) -> list[Release]:
