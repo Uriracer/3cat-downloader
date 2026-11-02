@@ -1,15 +1,13 @@
-"""Future Sonarr/Radarr integration (design + stubs only).
+"""Sonarr/Radarr integration (see ``README.md`` and ``docs/sonarr-radarr.md``).
 
-Nothing in this package is wired into the running application yet. The plan
-(see ``README.md`` next to this file) is for the local server to expose:
+The local server exposes:
 
-* a Newznab-compatible indexer at ``/arr/newznab/api`` so Sonarr/Radarr can
-  search the 3cat catalogue, and
-* a SABnzbd-compatible download-client API at ``/sabnzbd/api`` so they can
-  hand the "releases" they picked back to our ``DownloadManager`` and import
-  the finished files.
+* a Newznab-compatible indexer at ``/arr/newznab/api`` (:mod:`.indexer`,
+  :mod:`.releases`), so Sonarr/Radarr can search the 3cat catalogue, and
+* a SABnzbd-compatible download-client API at ``/sabnzbd/api`` (and ``/api``)
+  (:mod:`.sabnzbd`), so they hand the releases they pick to our
+  ``DownloadManager`` and import the finished folder.
 
-``router.py`` contains the endpoint skeletons (all answer HTTP 501). To enable
-the integration later, ``tresdl.server.create_app`` will do
-``app.include_router(tresdl.arr.router.router)`` before mounting the static UI.
+:func:`.router.create_arr_router` builds the routes; ``tresdl.server.create_app``
+mounts them before the static UI.
 """

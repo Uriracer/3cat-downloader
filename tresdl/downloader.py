@@ -368,36 +368,41 @@ class DownloadManager:
                 pass
 
     def enqueue(
-        self, episodes: list[Episode], quality: str | None = None, category: str = "tv"
+        self, episodes: list[Episode], quality: str | None = None, category: str = "tv",
+        targets: Optional[dict[int, str]] = None,
     ) -> list[DownloadJob]:
         """Queue ``episodes``; returns the newly created jobs.
 
-        Episodes whose video id already has a queued/active job are skipped.
+        Episodes whose video id already has a queued/active job (for the same
+        target) are skipped. ``targets`` maps video ids to explicit output files
+        (Sonarr/Radarr releases); those never get a ``[<id>]`` name.
         """
+        targets = dict(targets or {})
         quality = self._normalise_quality(quality)
         settings = self._settings()
         # Output paths are rendered outside the lock (about 0.1 ms each, so a
         # whole daily programme would otherwise block the queue for seconds).
         with self._lock:
             pending = [(j.id, j.episode, bool(self._extras.get(j.id, {}).get("unique")))
-                       for j in self._jobs.values() if j.status in PENDING_STATES]
+                       for j in self._jobs.values() if j.status in PENDING_STATES and not j.target]
         owners: dict[str, int] = {}
         for _job_id, ep, unique in pending:
             key = self._path_key(settings, ep, unique)
             if key is not None:
                 owners.setdefault(key, ep.id)
-        new_keys = {ep.id: self._path_key(settings, ep, False) for ep in episodes}
+        new_keys = {ep.id: self._path_key(settings, ep, False) for ep in episodes if ep.id not in targets}
 
         created: list[DownloadJob] = []
         with self._cond:
-            busy = {j.episode.id for j in self._jobs.values() if j.status in PENDING_STATES}
+            busy = {(j.episode.id, j.target) for j in self._jobs.values() if j.status in PENDING_STATES}
             for ep in episodes:
-                if ep.id in busy:
+                target = targets.get(ep.id)
+                if (ep.id, target) in busy:
                     continue
-                busy.add(ep.id)
+                busy.add((ep.id, target))
                 job = DownloadJob(
                     id=uuid.uuid4().hex, episode=ep, quality=quality,
-                    created_at=time.time(), category=category or "tv",
+                    created_at=time.time(), category=category or "tv", target=target,
                 )
                 # Same output path as an earlier job of another video (queue
                 # order: pending jobs, then this list in order) -> "[<id>]" name.
@@ -476,8 +481,8 @@ class DownloadManager:
         bases = [str(b) for b in kept]
         settings = self._settings()
         try:
-            out_dir = Path(naming.episode_path(settings.download_dir, job.episode, "mp4",
-                                               settings.filename_template)).parent
+            out_dir = Path(job.target or naming.episode_path(
+                settings.download_dir, job.episode, "mp4", settings.filename_template)).parent
             bases.append(str(out_dir / f"{TEMP_PREFIX}{job.id[:12]}"))
         except ValueError:
             pass
@@ -499,8 +504,8 @@ class DownloadManager:
             job = self._jobs.get(job_id)
             if job is None or job.status not in FINISHED_STATES:
                 return False
-            if any(j.episode.id == job.episode.id and j.status in PENDING_STATES
-                   for j in self._jobs.values()):
+            if any(j.episode.id == job.episode.id and j.target == job.target
+                   and j.status in PENDING_STATES for j in self._jobs.values()):
                 return False
             self._reset_locked(job)
             snap = copy.copy(job)
@@ -794,9 +799,14 @@ class DownloadManager:
             if not media.sources:
                 raise _JobFailed("No s'ha trobat cap font de vídeo per a aquest capítol.")
 
-            output = self._claim_output(job_id, ep, naming.episode_path(
-                settings.download_dir, ep, "mp4", settings.filename_template
-            ))
+            if job.target:  # Sonarr/Radarr release: exact file, never renamed
+                output = job.target
+                with self._lock:
+                    self._claims[job_id] = os.path.normcase(output)
+            else:
+                output = self._claim_output(job_id, ep, naming.episode_path(
+                    settings.download_dir, ep, "mp4", settings.filename_template
+                ))
             if settings.skip_existing and os.path.exists(output):
                 self._finalize(job_id, control, JobStatus.SKIPPED, output_path=output)
                 return

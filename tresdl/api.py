@@ -81,6 +81,8 @@ CATALOGUE_TTL = 24 * 3600.0     # seconds
 PROGRAM_CACHE_TTL = 3600.0      # seconds; programme detail (canonical series title)
 MEDIA_CACHE_TTL = 300.0         # seconds; media.jsp answers reused by get_episode/get_media
 MEDIA_CACHE_SIZE = 64
+FILMS_TTL = 6 * 3600.0          # seconds; film catalogue (format PUF_PEL)
+RECENT_TTL = 600.0              # seconds; latest full episodes (Sonarr RSS)
 
 RETRY_ATTEMPTS = 3
 RETRY_STATUSES = {429, 500, 502, 503, 504}
@@ -523,6 +525,10 @@ class ThreeCatClient:
         self._lock = threading.RLock()
         self._catalogue: list[Program] = []
         self._catalogue_at: float = 0.0
+        self._films: list[Episode] = []
+        self._films_at: float = 0.0
+        self._recent: list[Episode] = []
+        self._recent_at: float = 0.0
         self._media_cache: "OrderedDict[int, tuple[float, dict]]" = OrderedDict()
         self._season_titles: dict[str, str] = {}
         # program id -> (fetched at, Program, programme detail lists seasons)
@@ -865,6 +871,62 @@ class ThreeCatClient:
         if season_id:
             episodes = [ep for ep in episodes if ep.season_id == season_id]
         return sorted(episodes, key=_episode_sort_key)
+
+    def films(self, force: bool = False) -> list[Episode]:
+        """Every film on 3cat (format ``PUF_PEL``), newest first; cached.
+
+        Each film is an :class:`Episode` with ``program_id = 0`` and
+        ``program_title`` = its own title (same rule as :meth:`get_episode`).
+        """
+        with self._lock:
+            if self._films and not force and time.monotonic() - self._films_at < FILMS_TTL:
+                return list(self._films)
+        raw: dict[int, dict] = {}
+        page = 1
+        while True:
+            resposta = self._api("videos", fills="format_contingut", format_contingut="PUF_PEL",
+                                 items_pagina=1000, pagina=page)
+            items = resposta.get("items") or {}
+            page_items = as_list(items.get("item") if isinstance(items, dict) else items)
+            for item in page_items:
+                vid = _to_int(item.get("id")) if isinstance(item, dict) else None
+                if vid is not None:
+                    raw.setdefault(vid, item)
+            total_pages = _to_int((resposta.get("paginacio") or {}).get("total_pagines")) or 0
+            if not page_items or page >= total_pages or page >= 10:
+                break
+            page += 1
+        films: list[Episode] = []
+        for item in raw.values():
+            ep = self._episode_from_item(item, 0, "")
+            ep.program_id = 0
+            ep.program_title = ep.title or ep.raw_title
+            ep.season_id, ep.season_number, ep.episode_number = "", None, None
+            films.append(ep)
+        films.sort(key=lambda e: e.air_date or "", reverse=True)
+        with self._lock:
+            self._films, self._films_at = films, time.monotonic()
+        return list(films)
+
+    def recent_episodes(self, limit: int = 200) -> list[Episode]:
+        """Latest full episodes published on 3cat (all programmes); cached briefly."""
+        with self._lock:
+            if self._recent and time.monotonic() - self._recent_at < RECENT_TTL:
+                return list(self._recent[:limit])
+        resposta = self._api("videos", tipus_contingut="PPD", items_pagina=max(limit, 50), pagina=1,
+                             ordre="-data_publicacio")
+        items = resposta.get("items") or {}
+        episodes: list[Episode] = []
+        for item in as_list(items.get("item") if isinstance(items, dict) else items):
+            if not isinstance(item, dict) or _to_int(item.get("id")) is None:
+                continue
+            try:
+                episodes.append(self._episode_from_item(item, 0, ""))
+            except (KeyError, TypeError, ValueError):
+                continue
+        with self._lock:
+            self._recent, self._recent_at = episodes, time.monotonic()
+        return episodes[:limit]
 
     def list_seasons(self, episodes: list[Episode]) -> list[Season]:
         """Derive the seasons present in an episode list, sorted by number."""

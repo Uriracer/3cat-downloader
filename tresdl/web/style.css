@@ -649,3 +649,10 @@ input:disabled, input[readonly].is-locked { opacity: .75; cursor: not-allowed; }
   .mode-badge { display: none; }
   .auth-card { padding: 1.25rem; }
 }
+
+/* Sonarr / Radarr settings help */
+.arr-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; margin-top: 12px; }
+.arr-title { font-size: .95rem; margin: 0 0 6px; }
+.arr-list { display: grid; grid-template-columns: max-content 1fr; gap: 4px 12px; margin: 0; font-size: .9rem; }
+.arr-list dt { color: var(--muted); }
+.arr-list dd { margin: 0; overflow-wrap: anywhere; }

@@ -464,18 +464,6 @@ def test_resolve_web_dir_frozen(monkeypatch, tmp_path: Path) -> None:
     assert server.resolve_web_dir() == Path(server.__file__).resolve().parent / "web"
 
 
-def test_arr_router_stub_returns_501() -> None:
-    from tresdl.arr.router import router
-
-    app = FastAPI()
-    app.include_router(router)
-    with TestClient(app) as http:
-        assert http.get("/arr/newznab/api", params={"t": "caps"}).status_code == 501
-        assert http.get("/arr/nzb/v6293447.nzb").status_code == 501
-        assert http.get("/sabnzbd/api", params={"mode": "version"}).status_code == 501
-        assert http.post("/sabnzbd/api", params={"mode": "addfile"}).status_code == 501
-
-
 # --------------------------------------------------------------------------- #
 # Server-Sent Events (real uvicorn server on an ephemeral port)
 # --------------------------------------------------------------------------- #

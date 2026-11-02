@@ -30,7 +30,7 @@ datas.append((str(ffmpeg_exe), "imageio_ffmpeg/binaries"))
 hiddenimports = (
     collect_submodules("tresdl")      # sibling modules are imported lazily
     + collect_submodules("uvicorn")   # uvicorn picks loop/protocol modules by name
-    + ["imageio_ffmpeg.binaries"]
+    + ["imageio_ffmpeg.binaries", "python_multipart", "multipart"]
 )
 
 icon_candidates = [ROOT / "tresdl" / "web" / "icon.ico", ROOT / "assets" / "icon.ico"]

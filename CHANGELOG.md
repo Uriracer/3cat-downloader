@@ -2,6 +2,19 @@
 
 Format basat en [Keep a Changelog](https://keepachangelog.com/ca/1.1.0/); versions [SemVer](https://semver.org/lang/ca/).
 
+## [0.3.0] - 2026-11-02
+
+### Afegit
+- **Integració amb Sonarr i Radarr** ([guia](docs/sonarr-radarr.md)):
+  - Indexador compatible amb Newznab a `/arr/newznab`: cerca de capítols, temporades
+    (amb paquet de temporada), programes diaris per data i pel·lícules; canal RSS amb les
+    novetats de 3cat.
+  - Client de descàrrega compatible amb SABnzbd a `/sabnzbd/api`: Sonarr i Radarr hi envien
+    el que trien, en veuen la cua i l'historial i importen la carpeta descarregada.
+  - Cada llançament es desa a `<carpeta>/<categoria>/<nom del llançament>/`.
+- Catàleg de pel·lícules de 3cat i llistat dels últims capítols publicats.
+- La pàgina de configuració mostra què cal escriure a Sonarr i Radarr.
+
 ## [0.2.0] - 2026-11-02
 
 ### Afegit

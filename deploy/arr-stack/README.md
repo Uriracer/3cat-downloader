@@ -58,22 +58,26 @@ espai i el torrent continua compartint-se.
 6. **Seerr** (`:5055`): connecta'l a Jellyfin (`http://jellyfin:8096`), Sonarr i Radarr.
 7. **3Cat Downloader** (`:8765`): crea la contrasenya. Les descàrregues van a
    `/data/downloads/3cat`.
+8. **Sonarr i Radarr ↔ 3Cat Downloader**: afegeix-lo com a indexador i com a client de
+   descàrrega seguint [docs/sonarr-radarr.md](../../docs/sonarr-radarr.md).
 
 Dins de la xarxa de Docker, els serveis es troben pel nom: `sonarr`, `radarr`, `jellyfin`…
 
-## 3Cat Downloader i la biblioteca
+## 3Cat Downloader, Sonarr i Radarr
 
-Ara com ara, 3Cat Downloader desa les sèries a `/data/downloads/3cat/<Sèrie>/Season XX/`,
-amb noms que Sonarr reconeix. Hi ha dues maneres de fer-les arribar a Jellyfin:
+Afegeix 3Cat Downloader a Sonarr i Radarr com a indexador (Newznab) i com a client de
+descàrrega (SABnzbd) seguint [docs/sonarr-radarr.md](../../docs/sonarr-radarr.md). A partir
+d'aquí, el que demanis a Seerr o a Sonarr i sigui a 3cat es descarrega i s'importa sol: els
+llançaments es desen a `/data/downloads/3cat/tv/` i `/data/downloads/3cat/movies/`, que
+Sonarr i Radarr veuen al mateix camí.
+
+Les descàrregues que facis a mà des de la pàgina de 3Cat Downloader van a
+`/data/downloads/3cat/<Sèrie>/Season XX/`. Per portar-les a Jellyfin:
 
 - **Manual**: a Sonarr, *Wanted → Manual Import* sobre `/data/downloads/3cat`.
 - **Directa**: al servei `3cat-downloader` del `docker-compose.yml`, canvia el volum per
   `${DATA_ROOT}/media/tv:/data/media/tv` i posa `TRESDL_DOWNLOAD_DIR: /data/media/tv`.
   Jellyfin veurà els capítols de seguida, però Sonarr no els gestionarà.
-
-La propera versió afegirà la integració automàtica: Sonarr i Radarr veuran 3Cat Downloader
-com un indexador i un client de descàrrega més (vegeu
-[tresdl/arr/README.md](../../tresdl/arr/README.md)).
 
 ## Avisos
 

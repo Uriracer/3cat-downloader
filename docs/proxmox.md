@@ -67,7 +67,8 @@ docker compose up -d
 
 Ports: Jellyfin 8096, Sonarr 8989, Radarr 7878, Prowlarr 9696, qBittorrent 8080,
 Seerr 5055, 3Cat Downloader 8765 (Jackett 9117 i FlareSolverr 8191 si els actives).
-La configuració inicial de cada aplicació és a [deploy/arr-stack](../deploy/arr-stack/README.md).
+La configuració inicial de cada aplicació és a [deploy/arr-stack](../deploy/arr-stack/README.md),
+i la connexió amb Sonarr i Radarr a [sonarr-radarr.md](sonarr-radarr.md).
 
 ## Transcodificació per maquinari (Jellyfin)
 

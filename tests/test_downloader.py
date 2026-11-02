@@ -872,3 +872,21 @@ def test_cancel_is_prompt_while_the_network_stalls(make_manager, settings: Setti
         _StallHandler.stop.set()
         server.shutdown()
         server.server_close()
+
+
+def test_explicit_target_for_arr_releases(make_manager, settings: Settings, tmp_path: Path) -> None:
+    """Sonarr/Radarr jobs write exactly to their release folder and are not deduped
+    against a normal download of the same video."""
+    target = tmp_path / "videos" / "tv" / "Merli.S01E01.REL" / "Merli.S01E01.REL.mp4"
+    mgr = make_manager()
+    install_fake_ytdlp(mgr)
+    normal = mgr.enqueue([make_ep(1)])
+    arr = mgr.enqueue([make_ep(1)], category="tv", targets={1: str(target)})
+    again = mgr.enqueue([make_ep(1)], targets={1: str(target)})
+    assert len(normal) == 1 and len(arr) == 1 and again == []
+    mgr.start()
+    done = final(mgr, arr[0].id)
+    assert done.status == JobStatus.COMPLETED and done.output_path == str(target) and target.is_file()
+    assert done.target == str(target)
+    plain = final(mgr, normal[0].id)
+    assert plain.status == JobStatus.COMPLETED and plain.output_path != str(target)

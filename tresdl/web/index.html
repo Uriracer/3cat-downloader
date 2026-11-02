@@ -191,6 +191,31 @@
           </div>
           <p id="api-key-lock" class="help lock-hint" hidden></p>
           <p class="help">Adreça del servidor: <code id="set-server-url">—</code></p>
+
+          <p id="arr-desktop-note" class="help lock-hint" hidden>
+            Sonarr i Radarr normalment s'executen en un altre equip o contenidor: fes servir el
+            <strong>mode servidor</strong> (Docker, Linux o <code>--host 0.0.0.0</code>) perquè s'hi puguin connectar.
+          </p>
+          <div class="arr-grid">
+            <div>
+              <h3 class="arr-title">Indexador (Settings → Indexers → Newznab)</h3>
+              <dl class="arr-list">
+                <dt>URL</dt><dd><code id="arr-newznab-url">—</code></dd>
+                <dt>API Path</dt><dd><code>/api</code></dd>
+                <dt>API Key</dt><dd>la clau de dalt</dd>
+                <dt>Categories</dt><dd><code>5030,5040</code> (Sonarr) · <code>2030,2040</code> (Radarr)</dd>
+              </dl>
+            </div>
+            <div>
+              <h3 class="arr-title">Client de descàrrega (Settings → Download Clients → SABnzbd)</h3>
+              <dl class="arr-list">
+                <dt>Host / Port</dt><dd><code id="arr-host">—</code> / <code id="arr-port">—</code></dd>
+                <dt>URL Base</dt><dd><code>sabnzbd</code></dd>
+                <dt>API Key</dt><dd>la clau de dalt</dd>
+                <dt>Category</dt><dd><code>tv</code> (Sonarr) · <code>movies</code> (Radarr)</dd>
+              </dl>
+            </div>
+          </div>
         </fieldset>
 
         <div class="settings-actions">

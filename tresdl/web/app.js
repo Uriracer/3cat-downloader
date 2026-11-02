@@ -1288,6 +1288,11 @@ function fillSettingsForm(settings) {
   const serverMode = state.auth && state.auth.mode === 'server';
   $('#set-server-url').textContent = serverMode || !settings.server_port
     ? window.location.origin : `http://127.0.0.1:${settings.server_port}`;
+  const origin = window.location.origin;
+  $('#arr-newznab-url').textContent = `${origin}/arr/newznab`;
+  $('#arr-host').textContent = window.location.hostname;
+  $('#arr-port').textContent = window.location.port || (window.location.protocol === 'https:' ? '443' : '80');
+  $('#arr-desktop-note').hidden = serverMode;
   const locked = new Set(Array.isArray(settings.locked) ? settings.locked : []);
   const dirInput = /** @type {HTMLInputElement} */ ($('#set-download-dir'));
   dirInput.readOnly = locked.has('download_dir');

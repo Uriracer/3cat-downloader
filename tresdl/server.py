@@ -672,7 +672,9 @@ def create_app(client: Optional[ClientLike] = None,
                web_dir: Optional[Path] = None,
                allowed_hosts: Optional[frozenset[str]] = None,
                runtime: Optional[RuntimeConfig] = None,
-               auth: Optional[AuthManager] = None) -> FastAPI:
+               auth: Optional[AuthManager] = None,
+               arr_data_dir: Optional[Path] = None,
+               enable_arr: bool = True) -> FastAPI:
     """Build the FastAPI app.
 
     Missing collaborators are created with their defaults (lazy imports). A
@@ -1028,6 +1030,14 @@ def create_app(client: Optional[ClientLike] = None,
 
         return StreamingResponse(stream(), media_type="text/event-stream",
                                  headers={"X-Accel-Buffering": "no"})
+
+    # ------------------------------------------- Sonarr / Radarr (tresdl.arr)
+    if enable_arr:
+        from .arr.router import create_arr_router  # lazy: optional feature
+
+        arr_router = create_arr_router(cl, mgr, store.get, data_dir=arr_data_dir)
+        app.include_router(arr_router)
+        app.state.arr = arr_router
 
     # ------------------------------------------------------- static UI (LAST)
     ui_dir = Path(web_dir) if web_dir is not None else resolve_web_dir()

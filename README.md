@@ -10,6 +10,8 @@ a casa (Docker, Raspberry Pi, Proxmox) al costat de Jellyfin, Sonarr i Radarr.
 - Millor qualitat disponible (fins a 1080p), subtítols en català i audiodescripció opcional.
 - Fitxers a punt per a Jellyfin i Sonarr: `Sèrie/Season 01/Sèrie - S01E01 - Títol.mp4`.
 - Mode servidor amb contrasenya i clau d'API, accessible des del mòbil o l'ordinador de casa.
+- **Integració amb Sonarr i Radarr**: funciona com un indexador i un client de descàrrega
+  més, i els capítols nous es baixen sols ([guia](docs/sonarr-radarr.md)).
 
 ## Instal·lació
 
@@ -21,6 +23,7 @@ a casa (Docker, Raspberry Pi, Proxmox) al costat de Jellyfin, Sonarr i Radarr.
 | Proxmox (mini-PC) | Contenidor LXC amb Docker i tot l'stack multimèdia | [docs/proxmox.md](docs/proxmox.md) |
 | Linux natiu | `install.sh` crea un servei de systemd | [docs/linux.md](docs/linux.md) |
 | Python | `pip install 3cat_downloader-x.y.z-py3-none-any.whl` | [docs/development.md](docs/development.md) |
+| Sonarr i Radarr | indexador Newznab + client SABnzbd | [docs/sonarr-radarr.md](docs/sonarr-radarr.md) |
 
 ### Inici ràpid amb Docker
 
@@ -40,13 +43,6 @@ Per a l'stack complet (Jellyfin, Sonarr, Radarr, Prowlarr, Jackett, qBittorrent,
 
 Totes les opcions i variables d'entorn (`TRESDL_*`) són a
 [docs/configuration.md](docs/configuration.md).
-
-## Full de ruta
-
-- **Integració amb Sonarr i Radarr**: 3Cat Downloader es presentarà com un indexador
-  (Newznab) i un client de descàrrega (compatible amb SABnzbd). Així, quan demanis una sèrie
-  a Seerr o a Sonarr, si és a 3cat es descarregarà automàticament. El disseny és a
-  [tresdl/arr/README.md](tresdl/arr/README.md).
 
 ## Avís legal
 

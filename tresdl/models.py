@@ -122,7 +122,10 @@ class DownloadJob:
     error: Optional[str] = None
     created_at: float = 0.0        # unix time
     finished_at: Optional[float] = None
-    category: str = "tv"           # "tv" | "movies" (future Sonarr/Radarr categories)
+    category: str = "tv"           # "tv" | "movies" (Sonarr/Radarr categories)
+    #: Explicit output file (absolute, ".mp4") instead of the settings template.
+    #: Used by the Sonarr/Radarr integration (one folder per release).
+    target: Optional[str] = None
 
     def to_dict(self) -> dict:
         d = asdict(self)
