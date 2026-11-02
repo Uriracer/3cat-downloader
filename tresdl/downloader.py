@@ -258,9 +258,13 @@ def _job_from_dict(data: dict) -> Optional[DownloadJob]:
 
 
 def _ffmpeg_exe() -> str:
-    import imageio_ffmpeg
+    """ffmpeg path (``TRESDL_FFMPEG`` → bundled imageio-ffmpeg → PATH)."""
+    from .runtime import ffmpeg_exe
 
-    return imageio_ffmpeg.get_ffmpeg_exe()
+    try:
+        return ffmpeg_exe()
+    except RuntimeError as exc:
+        raise _JobFailed(str(exc)) from exc
 
 
 def _remove_quietly(path: str) -> None:

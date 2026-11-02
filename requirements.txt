@@ -1,14 +1,7 @@
-# 3Cat Downloader - dependencies (Python 3.11+)
-# Install: python -m pip install -r requirements.txt
-
-# --- Runtime ---
+# 3Cat Downloader - runtime dependencies (Python 3.11+), without the desktop window.
+# Used by Docker images and native Linux installs.
 fastapi>=0.115
 uvicorn[standard]>=0.30
 httpx>=0.27
 yt-dlp>=2025.1.1
 imageio-ffmpeg>=0.5.1
-pywebview>=5.0
-
-# --- Development, tests and packaging ---
-pytest>=8.0
-pyinstaller>=6.6

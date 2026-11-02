@@ -53,6 +53,8 @@ class Settings:
     filename_template: str = DEFAULT_TEMPLATE
     server_port: int = 8765
     api_key: str = field(default_factory=_new_api_key)  # for future *arr integration
+    #: Login password for server mode (see tresdl/auth.py); never sent to clients.
+    password_hash: str = ""
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -108,6 +110,8 @@ def _coerce(name: str, value: Any, default: Any) -> Any:
             return value
         if name == "api_key":
             return value.strip() if isinstance(value, str) and value.strip() else _new_api_key()
+        if name == "password_hash":
+            return value if isinstance(value, str) and value.startswith("pbkdf2_sha256$") else ""
         if name == "download_dir":
             return value.strip() if isinstance(value, str) and value.strip() else default
         return value if isinstance(value, type(default)) else default
