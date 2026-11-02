@@ -8,6 +8,16 @@ servidors) i `linux/arm64` (Raspberry Pi 4/5 amb sistema de 64 bits).
 | `latest` | última versió publicada |
 | `0.2.0`, `0.2` | versió concreta (recomanat si vols controlar les actualitzacions) |
 
+## Instal·lació automàtica
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Uriracer/3cat-downloader/main/deploy/docker/setup.sh | bash
+```
+
+Instal·la Docker si cal, et pregunta la carpeta dels vídeos i el port, i arrenca el
+contenidor. Opcions: `--media DIR`, `--port PORT`, `--password TEXT`, `--tag 0.3.0`, `--yes`
+(sense preguntes) i `--uninstall`. Van després de `bash -s --`.
+
 ## Docker Compose
 
 Fitxer d'exemple: [deploy/docker-compose.yml](../deploy/docker-compose.yml).

@@ -14,6 +14,18 @@ imatge Docker.
 
 ## Opció A: Docker (recomanat)
 
+Amb una sola ordre: instal·la Docker si cal, et pregunta la carpeta dels vídeos i el port,
+crea el `docker-compose.yml`, arrenca el contenidor i et mostra l'adreça.
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Uriracer/3cat-downloader/main/deploy/docker/setup.sh | bash
+```
+
+Executa-ho amb el teu usuari, no com a root. Per desinstal·lar el contenidor, que conserva
+la configuració i els vídeos, afegeix `-s -- --uninstall` després de `bash`.
+
+O bé pas a pas:
+
 ```bash
 curl -fsSL https://get.docker.com | sudo sh
 sudo usermod -aG docker "$USER"   # tanca la sessió i torna a entrar

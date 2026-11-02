@@ -42,7 +42,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: ShellCheck
-        run: shellcheck -x deploy/linux/install.sh && shellcheck -s sh docker/entrypoint.sh
+        run: shellcheck -x deploy/linux/install.sh deploy/docker/setup.sh && shellcheck -s sh docker/entrypoint.sh
       - name: Hadolint
         uses: hadolint/hadolint-action@v3.1.0
         with:

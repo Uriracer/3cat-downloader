@@ -40,7 +40,7 @@ def test_installer_defaults_match_unit() -> None:
     assert 'PREFIX="/opt/$APP"' in script and 'DATA_DIR="/var/lib/$APP"' in script
 
 
-@pytest.mark.parametrize("path", ["deploy/linux/install.sh", "docker/entrypoint.sh"])
+@pytest.mark.parametrize("path", ["deploy/linux/install.sh", "docker/entrypoint.sh", "deploy/docker/setup.sh"])
 def test_scripts_have_lf_line_endings(path: str) -> None:
     assert b"\r\n" not in (ROOT / path).read_bytes()
 
@@ -69,7 +69,8 @@ def _shellcheck() -> str | None:
 
 
 @pytest.mark.skipif(_shellcheck() is None, reason="shellcheck not installed (pip install shellcheck-py)")
-@pytest.mark.parametrize("path,shell", [("deploy/linux/install.sh", "bash"), ("docker/entrypoint.sh", "sh")])
+@pytest.mark.parametrize("path,shell", [("deploy/linux/install.sh", "bash"), ("docker/entrypoint.sh", "sh"),
+                                        ("deploy/docker/setup.sh", "bash")])
 def test_shellcheck(path: str, shell: str) -> None:
     result = subprocess.run([_shellcheck(), "-s", shell, "-x", str(ROOT / path)],
                             capture_output=True, text=True)
