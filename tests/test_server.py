@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import socket
 import threading
 import time
@@ -408,7 +409,8 @@ def test_open_folder(env, monkeypatch, tmp_path: Path) -> None:
     outside.mkdir()
     assert http.post("/api/open-folder", json={"path": str(outside)}).status_code == 400
     assert http.post("/api/open-folder", json={"path": str(downloads / ".." / "secret")}).status_code == 400
-    assert http.post("/api/open-folder", json={"path": "C:\\Windows"}).status_code == 400
+    system_dir = "C:\\Windows" if os.name == "nt" else "/etc"  # an absolute path outside the root
+    assert http.post("/api/open-folder", json={"path": system_dir}).status_code == 400
     assert http.post("/api/open-folder", json={"path": str(downloads / "no-hi-és")}).status_code == 404
     assert len(opened) == 3
 

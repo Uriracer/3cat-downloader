@@ -35,7 +35,7 @@ jobs:
       - id: version
         name: Tag must match tresdl.__version__
         run: echo "version=$(python scripts/check_version.py "$TAG")" >> "$GITHUB_OUTPUT"
-      - run: python -m pip install -r requirements.txt pytest pyyaml shellcheck-py
+      - run: python -m pip install -r requirements.txt pytest pyyaml shellcheck-py pytest-github-actions-annotate-failures
       - run: python -m pytest -m "not live" -q
 
   python-dist:

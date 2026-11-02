@@ -127,9 +127,9 @@ ensure_root() {
 check_os() {
     [ -r /etc/os-release ] || die "no s'ha pogut identificar el sistema (falta /etc/os-release)"
     local id like
-    # shellcheck disable=SC1091
+    # shellcheck source=/dev/null
     id="$(. /etc/os-release && printf '%s' "${ID:-}")"
-    # shellcheck disable=SC1091
+    # shellcheck source=/dev/null
     like="$(. /etc/os-release && printf '%s' "${ID_LIKE:-}")"
     case " $id $like " in
         *" debian "*|*" ubuntu "*|*" raspbian "*) ;;

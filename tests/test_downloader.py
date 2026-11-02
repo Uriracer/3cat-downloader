@@ -453,8 +453,8 @@ def test_retry_remove_clear(make_manager) -> None:
     assert final(mgr, job.id).status == JobStatus.COMPLETED
     assert mgr.get(job.id).error is None
 
+    mgr.stop()  # stopped first, so the new job deterministically stays queued
     pending = mgr.enqueue([make_ep(2)])[0]
-    mgr.stop()
     assert mgr.remove(pending.id) is False          # still queued
     assert mgr.retry(pending.id) is False
     assert mgr.clear_finished() == 1
