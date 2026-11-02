@@ -308,8 +308,8 @@ def resolve_web_dir() -> Path:
         return Path(override)
     meipass = getattr(sys, "_MEIPASS", None)
     if getattr(sys, "frozen", False) and meipass:
-        return Path(meipass) / "web"
-    return Path(__file__).resolve().parent.parent / "web"
+        return Path(meipass) / "tresdl" / "web"
+    return Path(__file__).resolve().parent / "web"
 
 
 def jsonable(value: Any) -> Any:

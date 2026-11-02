@@ -457,9 +457,9 @@ def test_resolve_web_dir_frozen(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.delenv("TRESDL_WEB_DIR", raising=False)
     monkeypatch.setattr(server.sys, "frozen", True, raising=False)
     monkeypatch.setattr(server.sys, "_MEIPASS", str(tmp_path), raising=False)
-    assert server.resolve_web_dir() == tmp_path / "web"
+    assert server.resolve_web_dir() == tmp_path / "tresdl" / "web"
     monkeypatch.setattr(server.sys, "frozen", False, raising=False)
-    assert server.resolve_web_dir() == Path(server.__file__).resolve().parent.parent / "web"
+    assert server.resolve_web_dir() == Path(server.__file__).resolve().parent / "web"
 
 
 def test_arr_router_stub_returns_501() -> None:

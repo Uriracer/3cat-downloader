@@ -16,8 +16,8 @@ from PyInstaller.utils.hooks import collect_submodules
 ROOT = Path(SPECPATH)  # noqa: F821 - injected by PyInstaller
 APP_NAME = "3CatDownloader"
 
-# Static UI, found at runtime under sys._MEIPASS/web (tresdl.server.resolve_web_dir).
-datas = [(str(ROOT / "web"), "web")]
+# Static UI, found at runtime under sys._MEIPASS/tresdl/web (tresdl.server.resolve_web_dir).
+datas = [(str(ROOT / "tresdl" / "web"), "tresdl/web")]
 
 # ffmpeg from imageio-ffmpeg, at the place imageio_ffmpeg.get_ffmpeg_exe() looks for
 # it (imageio_ffmpeg/binaries). The contrib hook also collects it; listing it here
@@ -33,7 +33,7 @@ hiddenimports = (
     + ["imageio_ffmpeg.binaries"]
 )
 
-icon_candidates = [ROOT / "web" / "icon.ico", ROOT / "assets" / "icon.ico"]
+icon_candidates = [ROOT / "tresdl" / "web" / "icon.ico", ROOT / "assets" / "icon.ico"]
 icon = next((str(p) for p in icon_candidates if p.is_file()), None)
 
 a = Analysis(  # noqa: F821
