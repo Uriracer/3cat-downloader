@@ -1,98 +1,62 @@
 # 3Cat Downloader
 
-Aplicació d'escriptori per descarregar **temporades senceres o sèries completes** de
-[3cat](https://www.3cat.cat/), no només capítol a capítol.
+Descarrega **temporades senceres o sèries completes** de [3cat](https://www.3cat.cat/),
+no només capítol a capítol. Funciona com a aplicació d'escriptori a Windows i com a servei
+a casa (Docker, Raspberry Pi, Proxmox) al costat de Jellyfin, Sonarr i Radarr.
 
-- Enganxa un enllaç de 3cat (programa o vídeo), un número de vídeo o simplement cerca pel nom.
-- Tria la sèrie sencera, unes temporades concretes o capítols solts.
-- Cua de descàrregues amb progrés en temps real, cancel·lació i reintents. Les
-  descàrregues pendents es recuperen si tanques el programa.
-- Qualitat màxima disponible (fins a 1080p) o una resolució concreta, amb subtítols en català.
-- Fitxers organitzats a l'estil de Sonarr/Radarr:
-  `Sèrie/Season 01/Sèrie - S01E01 - Títol.mp4`.
-- Preparat per integrar-se en el futur amb **Sonarr i Radarr** (vegeu
-  [`tresdl/arr/README.md`](tresdl/arr/README.md)).
+- Enganxa un enllaç de 3cat o cerca pel nom de la sèrie.
+- Tria la sèrie sencera, unes temporades o capítols solts.
+- Cua de descàrregues en directe, amb cancel·lació, reintents i represa després d'un reinici.
+- Millor qualitat disponible (fins a 1080p), subtítols en català i audiodescripció opcional.
+- Fitxers a punt per a Jellyfin i Sonarr: `Sèrie/Season 01/Sèrie - S01E01 - Títol.mp4`.
+- Mode servidor amb contrasenya i clau d'API, accessible des del mòbil o l'ordinador de casa.
 
-## Com funciona
+## Instal·lació
 
-El programa arrenca un petit servidor local (només accessible des del mateix ordinador,
-a `http://127.0.0.1:8765`) i mostra la interfície en una finestra pròpia. Les descàrregues
-es fan amb [yt-dlp](https://github.com/yt-dlp/yt-dlp) i [ffmpeg](https://ffmpeg.org/)
-(inclòs automàticament amb `imageio-ffmpeg`).
+> A les ordres i enllaços, substitueix `<usuari>` pel nom d'usuari de GitHub on hi ha
+> publicat aquest repositori.
 
-## Requisits
+| On | Com | Guia |
+|---|---|---|
+| Windows | Instal·lador `3CatDownloader-x.y.z-setup.exe` o zip portable de [Releases](../../releases) | [docs/windows.md](docs/windows.md) |
+| Docker (qualsevol servidor) | `ghcr.io/<usuari>/3cat-downloader` per a amd64 i arm64 | [docs/docker.md](docs/docker.md) |
+| Raspberry Pi 4/5 | Docker o instal·lació nativa (Raspberry Pi OS de 64 bits) | [docs/raspberry-pi.md](docs/raspberry-pi.md) |
+| Proxmox (mini-PC) | Contenidor LXC amb Docker i tot l'stack multimèdia | [docs/proxmox.md](docs/proxmox.md) |
+| Linux natiu | `install.sh` crea un servei de systemd | [docs/linux.md](docs/linux.md) |
+| Python | `pip install 3cat_downloader-x.y.z-py3-none-any.whl` | [docs/development.md](docs/development.md) |
 
-- Windows 10/11 (també hauria de funcionar a Linux i macOS des del codi font).
-- [Python 3.11](https://www.python.org/downloads/) o posterior, si l'executes des del codi font.
-- Microsoft Edge WebView2 Runtime (ja ve instal·lat a Windows 11). Si no hi és, el programa
-  s'obre al navegador.
+### Inici ràpid amb Docker
 
-## Instal·lació (des del codi font)
-
-```powershell
-cd 3cat
-python -m venv .venv
-.venv\Scripts\python.exe -m pip install -r requirements.txt
+```bash
+mkdir -p ~/3cat-downloader && cd ~/3cat-downloader
+curl -fsSLO https://raw.githubusercontent.com/<usuari>/3cat-downloader/main/deploy/docker-compose.yml
+# edita PUID/PGID, la carpeta de vídeos i <usuari>
+docker compose up -d
 ```
 
-## Execució
+Obre `http://<ip-del-servidor>:8765/`. El primer cop et demanarà que creïs una contrasenya.
 
-```powershell
-.venv\Scripts\python.exe run.py
-```
+Per a l'stack complet (Jellyfin, Sonarr, Radarr, Prowlarr, Jackett, qBittorrent, Seerr i
+3Cat Downloader) mira [deploy/arr-stack](deploy/arr-stack/README.md).
 
-Opcions:
+## Configuració
 
-| Opció | Què fa |
-|---|---|
-| `--no-gui` | Només el servidor, sense finestra (útil per a un ús sense pantalla, p. ex. amb Sonarr/Radarr en el futur). La interfície continua disponible a `http://127.0.0.1:8765` des del navegador. Atura'l amb Ctrl+C. |
-| `--port 9000` | Usa un altre port. Si està ocupat, se'n tria un de lliure automàticament. |
-| `--debug` | Registre detallat i eines de desenvolupament a la finestra. |
+Totes les opcions i variables d'entorn (`TRESDL_*`) són a
+[docs/configuration.md](docs/configuration.md).
 
-Si el programa ja s'està executant, una segona execució simplement obre la mateixa
-finestra (no es creen dues cues de descàrregues).
+## Full de ruta
 
-La configuració, la cua i els registres es desen a `%APPDATA%\3CatDownloader\`
-(`settings.json`, `queue.json`, `logs\`). Per defecte els vídeos es desen a
-`Vídeos\3Cat` (es pot canviar a la pantalla de configuració).
-
-## Proves
-
-```powershell
-.venv\Scripts\python.exe -m pytest -m "not live"   # sense xarxa
-.venv\Scripts\python.exe -m pytest                 # inclou proves contra els servidors de 3cat
-```
-
-## Crear l'executable (.exe)
-
-```powershell
-.venv\Scripts\pyinstaller.exe 3CatDownloader.spec --noconfirm --clean
-```
-
-El resultat és la carpeta `dist\3CatDownloader\`; executa `3CatDownloader.exe`. Per
-distribuir-lo, comprimeix tota la carpeta (inclou la interfície i ffmpeg).
-
-## Estructura
-
-```
-run.py                 punt d'entrada (servidor + finestra)
-tresdl/api.py          client de l'API de 3cat
-tresdl/downloader.py   cua i descàrregues (yt-dlp + ffmpeg)
-tresdl/naming.py       noms de fitxer i carpetes
-tresdl/config.py       configuració
-tresdl/server.py       API REST local + interfície
-tresdl/arr/            futura integració amb Sonarr/Radarr (disseny)
-web/                   interfície (HTML/CSS/JS)
-```
+- **Integració amb Sonarr i Radarr**: 3Cat Downloader es presentarà com un indexador
+  (Newznab) i un client de descàrrega (compatible amb SABnzbd). Així, quan demanis una sèrie
+  a Seerr o a Sonarr, si és a 3cat es descarregarà automàticament. El disseny és a
+  [tresdl/arr/README.md](tresdl/arr/README.md).
 
 ## Avís legal
 
-- Aquest programa només descarrega **contingut que 3cat ofereix lliurement i de forma
-  gratuïta** a la seva web.
-- **No elude cap protecció**: no trenca DRM ni restriccions geogràfiques. Si un vídeo
-  està protegit o només es pot veure des de Catalunya/Espanya i no hi ets, el programa
-  mostra un error i no el descarrega.
-- És per a **ús personal i privat**. Els continguts són propietat de la Corporació
-  Catalana de Mitjans Audiovisuals (CCMA) i dels seus titulars de drets; no els
-  redistribueixis.
-- Projecte independent, sense cap relació amb 3cat ni amb la CCMA.
+- Només descarrega **contingut que 3cat ofereix lliurement i gratuïtament** a la seva web.
+- **No elude cap protecció**: no trenca DRM ni restriccions geogràfiques. Molts continguts
+  només es poden veure des d'Espanya. Si el servidor surt a internet per una VPN estrangera,
+  aquests vídeos fallaran.
+- És per a **ús personal i privat**. Els continguts són propietat de la CCMA i dels seus
+  titulars de drets: no els redistribueixis.
+- Projecte independent, sense cap relació amb 3cat ni amb la CCMA. Llicència [MIT](LICENSE).
