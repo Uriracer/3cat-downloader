@@ -809,8 +809,9 @@ def test_cancel_during_subtitles_leaves_no_sidecar(make_manager, settings: Setti
         return _SubResp()
 
     monkeypatch.setattr(dl.httpx, "get", get)
-    mgr.start()
+    # Enqueue before starting: the worker must not reach get() before the id is known.
     holder["id"] = mgr.enqueue([make_ep(9)])[0].id
+    mgr.start()
     job = final(mgr, holder["id"])
     assert job.status == JobStatus.CANCELLED
     assert list(Path(settings.download_dir).rglob("*")) == []
