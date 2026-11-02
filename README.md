@@ -13,13 +13,10 @@ a casa (Docker, Raspberry Pi, Proxmox) al costat de Jellyfin, Sonarr i Radarr.
 
 ## Instal·lació
 
-> A les ordres i enllaços, substitueix `<usuari>` pel nom d'usuari de GitHub on hi ha
-> publicat aquest repositori.
-
 | On | Com | Guia |
 |---|---|---|
 | Windows | Instal·lador `3CatDownloader-x.y.z-setup.exe` o zip portable de [Releases](../../releases) | [docs/windows.md](docs/windows.md) |
-| Docker (qualsevol servidor) | `ghcr.io/<usuari>/3cat-downloader` per a amd64 i arm64 | [docs/docker.md](docs/docker.md) |
+| Docker (qualsevol servidor) | `ghcr.io/uriracer/3cat-downloader` per a amd64 i arm64 | [docs/docker.md](docs/docker.md) |
 | Raspberry Pi 4/5 | Docker o instal·lació nativa (Raspberry Pi OS de 64 bits) | [docs/raspberry-pi.md](docs/raspberry-pi.md) |
 | Proxmox (mini-PC) | Contenidor LXC amb Docker i tot l'stack multimèdia | [docs/proxmox.md](docs/proxmox.md) |
 | Linux natiu | `install.sh` crea un servei de systemd | [docs/linux.md](docs/linux.md) |
@@ -29,8 +26,8 @@ a casa (Docker, Raspberry Pi, Proxmox) al costat de Jellyfin, Sonarr i Radarr.
 
 ```bash
 mkdir -p ~/3cat-downloader && cd ~/3cat-downloader
-curl -fsSLO https://raw.githubusercontent.com/<usuari>/3cat-downloader/main/deploy/docker-compose.yml
-# edita PUID/PGID, la carpeta de vídeos i <usuari>
+curl -fsSLO https://raw.githubusercontent.com/Uriracer/3cat-downloader/main/deploy/docker-compose.yml
+# edita PUID/PGID i la carpeta de vídeos
 docker compose up -d
 ```
 

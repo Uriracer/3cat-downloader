@@ -3,7 +3,7 @@
 ## Instal·lador (recomanat)
 
 1. Descarrega `3CatDownloader-x.y.z-setup.exe` de la pàgina de
-   [versions](https://github.com/<usuari>/3cat-downloader/releases/latest).
+   [versions](https://github.com/Uriracer/3cat-downloader/releases/latest).
 2. Executa'l. No cal ser administrador: s'instal·la només per al teu usuari.
 3. Obre **3Cat Downloader** des del menú d'inici.
 

@@ -6,13 +6,13 @@ que ja porten totes aquestes versions.
 ## Instal·lar
 
 ```bash
-curl -fsSL https://github.com/<usuari>/3cat-downloader/releases/latest/download/install.sh | sudo bash
+curl -fsSL https://github.com/Uriracer/3cat-downloader/releases/latest/download/install.sh | sudo bash
 ```
 
 Opcions útils (van després de `bash -s --`):
 
 ```bash
-curl -fsSL https://github.com/<usuari>/3cat-downloader/releases/latest/download/install.sh \
+curl -fsSL https://github.com/Uriracer/3cat-downloader/releases/latest/download/install.sh \
   | sudo bash -s -- --user media --download-dir /srv/media/3cat --port 8765
 ```
 
@@ -47,7 +47,7 @@ Obre `http://<ip>:8765/`. El primer cop crearàs la contrasenya.
 ## Actualitzar
 
 ```bash
-curl -fsSL https://github.com/<usuari>/3cat-downloader/releases/latest/download/install.sh \
+curl -fsSL https://github.com/Uriracer/3cat-downloader/releases/latest/download/install.sh \
   | sudo bash -s -- --update
 ```
 
@@ -56,7 +56,7 @@ Es conserven el fitxer `.env`, la configuració i la cua.
 ## Desinstal·lar
 
 ```bash
-curl -fsSL https://github.com/<usuari>/3cat-downloader/releases/latest/download/install.sh \
+curl -fsSL https://github.com/Uriracer/3cat-downloader/releases/latest/download/install.sh \
   | sudo bash -s -- --uninstall           # conserva la configuració
 #                       --uninstall --purge   # també esborra configuració i usuari tresdl
 ```
@@ -66,7 +66,7 @@ Els vídeos no s'esborren mai.
 ## Des del codi font
 
 ```bash
-git clone https://github.com/<usuari>/3cat-downloader.git
+git clone https://github.com/Uriracer/3cat-downloader.git
 cd 3cat-downloader
 sudo ./deploy/linux/install.sh --from-source .
 ```
