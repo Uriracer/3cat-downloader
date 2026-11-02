@@ -50,7 +50,7 @@ jobs:
         with:
           python-version: "3.13"
       - run: python -m pip install build && python -m build --outdir dist
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: python-dist
           path: dist/*
@@ -129,7 +129,7 @@ jobs:
           }
           & $iscc "/DMyAppVersion=$env:VERSION" "/O$PWD\out" deploy\windows\3CatDownloader.iss
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: windows
           path: out/*
