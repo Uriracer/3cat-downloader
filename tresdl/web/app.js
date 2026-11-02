@@ -83,7 +83,17 @@ const state = {
   backStack: [],
   /** Incremented on every navigation so stale responses are ignored. */
   navToken: 0,
+  /** @type {{mode: string, auth_required: boolean, configured: boolean, authenticated: boolean, password_from_env: boolean} | null} */
+  auth: null,
+  /** True while the login screen is shown. */
+  locked: false,
+  /** True once the main app (events, jobs, settings) has been started. */
+  started: false,
 };
+
+/** Settings fields that an environment variable can force → variable name. */
+const LOCK_VARS = { download_dir: 'TRESDL_DOWNLOAD_DIR', api_key: 'TRESDL_API_KEY' };
+const MIN_PASSWORD = 8;
 
 // ---------------------------------------------------------------------------
 // Small utilities
@@ -253,6 +263,7 @@ async function api(path, { method = 'GET', body } = {}) {
     try { data = JSON.parse(text); } catch { data = null; }
   }
   if (!res.ok) {
+    if (res.status === 401 && !path.startsWith('auth/')) handleUnauthorized();
     throw new ApiError(detailMessage(data) || `El servidor ha retornat un error (${res.status}).`, res.status);
   }
   return data;
@@ -1013,7 +1024,7 @@ function createJobRow(jobId) {
   refs.remove = action('Treu de la llista', 'btn-ghost', () => removeJob(jobId));
   // By job id: the server opens the job's own folder even if the download
   // folder setting changed since.
-  refs.open = action('Obre la carpeta', '', () => openFolder({ job_id: jobId }));
+  refs.open = action('Obre la carpeta', 'desktop-only', () => openFolder({ job_id: jobId }));
 
   const el = h('li', { class: 'job card' },
     refs.thumb,
@@ -1166,8 +1177,16 @@ function setConnection(stateName) {
   }[stateName] || '';
 }
 
+function disconnectEvents() {
+  clearTimeout(reconnectTimer);
+  clearInterval(pollTimer);
+  if (eventSource) eventSource.close();
+  eventSource = null;
+}
+
 function connectEvents() {
   clearTimeout(reconnectTimer);
+  if (state.locked) return;
   if (typeof window.EventSource !== 'function') {
     // Very old engines: fall back to polling.
     setConnection('online');
@@ -1195,8 +1214,11 @@ function connectEvents() {
     }
   });
   es.addEventListener('error', () => {
+    if (state.locked) { es.close(); return; }
     setConnection('offline');
     if (es.readyState === EventSource.CLOSED) {
+      // A 401 also closes the stream: check whether the session expired.
+      checkSession();
       // The browser gave up (e.g. server restarted with an error status): retry ourselves.
       es.close();
       if (eventSource === es) eventSource = null;
@@ -1263,8 +1285,22 @@ function fillSettingsForm(settings) {
     }
   }
   $('#set-api-key').value = settings.api_key || '';
-  $('#set-server-url').textContent = settings.server_port ? `http://127.0.0.1:${settings.server_port}` : window.location.origin;
+  const serverMode = state.auth && state.auth.mode === 'server';
+  $('#set-server-url').textContent = serverMode || !settings.server_port
+    ? window.location.origin : `http://127.0.0.1:${settings.server_port}`;
+  const locked = new Set(Array.isArray(settings.locked) ? settings.locked : []);
+  const dirInput = /** @type {HTMLInputElement} */ ($('#set-download-dir'));
+  dirInput.readOnly = locked.has('download_dir');
+  dirInput.classList.toggle('is-locked', locked.has('download_dir'));
+  showLockHint('#download-dir-lock', locked.has('download_dir') ? LOCK_VARS.download_dir : null);
+  showLockHint('#api-key-lock', locked.has('api_key') ? LOCK_VARS.api_key : null);
   onSettingsInput();
+}
+
+function showLockHint(selector, variable) {
+  const el = $(selector);
+  el.hidden = !variable;
+  el.textContent = variable ? `Definit per la variable d'entorn ${variable}; no es pot canviar des d'aquí.` : '';
 }
 
 function readSettingsForm() {
@@ -1425,7 +1461,8 @@ async function checkHealth() {
     if (health && health.version) parts.push(`versió ${health.version}`);
     $('#footer-info').textContent = parts.join(' · ');
     if (health && health.ffmpeg === false) {
-      toast("No s'ha trobat ffmpeg. Les descàrregues en màxima qualitat poden fallar; prova amb «MP4 directe».", {
+      const why = health.ffmpeg_error ? `${health.ffmpeg_error} ` : "No s'ha trobat ffmpeg. ";
+      toast(`${why}Les descàrregues en màxima qualitat poden fallar; prova amb «MP4 directe».`, {
         kind: 'warning', title: 'Falta un component', timeout: 0,
       });
     }
@@ -1434,19 +1471,193 @@ async function checkHealth() {
   }
 }
 
-async function boot() {
-  wireStaticUi();
-  renderHome();
-  renderJobs();
+/** Start (or, after a new login, resume) the main application. */
+async function startApp() {
+  if (!state.started) {
+    state.started = true;
+    renderHome();
+    renderJobs();
+  }
   connectEvents();
   checkHealth();
   refreshJobs();
   try {
     await loadSettings();
+    const form = $('#settings-form');
+    delete form.dataset.loaded;
+    if (state.view === 'settings') loadSettingsForm();
     if (state.home.kind === 'program' || state.home.kind === 'video') renderHome();
   } catch (err) {
     console.warn('Could not load settings', err);
   }
+}
+
+// ---------------------------------------------------------------------------
+// Authentication (server mode)
+// ---------------------------------------------------------------------------
+
+async function fetchAuthStatus() {
+  const status = await api('auth/status');
+  state.auth = status;
+  applyMode();
+  return status;
+}
+
+/** Reflect the mode (desktop/server) and session state in the page chrome. */
+function applyMode() {
+  const auth = state.auth;
+  const server = Boolean(auth && auth.mode === 'server');
+  document.body.dataset.mode = server ? 'server' : 'desktop';
+  $('#session-box').hidden = !server;
+  $('#logout-btn').hidden = !(auth && auth.auth_required && auth.authenticated);
+  $('#password-form').hidden = !(server && auth.auth_required && !auth.password_from_env);
+}
+
+function showAuthScreen() {
+  const auth = state.auth || { configured: true };
+  const firstRun = !auth.configured;
+  state.locked = true;
+  disconnectEvents();
+  document.body.classList.add('is-locked');
+  $('#auth-screen').hidden = false;
+  $('#auth-title').textContent = firstRun ? 'Crea una contrasenya' : 'Inicia la sessió';
+  $('#auth-text').textContent = firstRun
+    ? `Primer cop que obres 3Cat Downloader des de la xarxa. Tria una contrasenya (mínim ${MIN_PASSWORD} caràcters) per protegir-lo.`
+    : 'Escriu la contrasenya de 3Cat Downloader.';
+  $('#auth-confirm-row').hidden = !firstRun;
+  $('#auth-password').setAttribute('autocomplete', firstRun ? 'new-password' : 'current-password');
+  $('#auth-submit').textContent = firstRun ? 'Crea la contrasenya i entra' : 'Entra';
+  setAuthError('');
+  applyMode();
+  setTimeout(() => $('#auth-password').focus(), 0);
+}
+
+function hideAuthScreen() {
+  state.locked = false;
+  document.body.classList.remove('is-locked');
+  $('#auth-screen').hidden = true;
+  $('#auth-password').value = '';
+  $('#auth-confirm').value = '';
+}
+
+function setAuthError(message) {
+  const el = $('#auth-error');
+  el.textContent = message;
+  el.hidden = !message;
+}
+
+let unauthorizedPending = false;
+
+/** Any protected call returned 401: the session expired or was revoked. */
+async function handleUnauthorized() {
+  if (state.locked || unauthorizedPending) return;
+  unauthorizedPending = true;
+  try {
+    const status = await fetchAuthStatus();
+    if (status.auth_required && !status.authenticated) {
+      showAuthScreen();
+      toast('La sessió ha caducat. Torna a entrar.', { kind: 'warning' });
+    }
+  } catch { /* server unreachable: the connection indicator already says so */ }
+  finally { unauthorizedPending = false; }
+}
+
+async function checkSession() {
+  if (!state.auth || !state.auth.auth_required || state.locked) return;
+  try {
+    const status = await api('auth/status');
+    if (!status.authenticated) handleUnauthorized();
+  } catch { /* offline */ }
+}
+
+async function submitAuth(event) {
+  event.preventDefault();
+  const firstRun = state.auth && !state.auth.configured;
+  const password = $('#auth-password').value;
+  if (!password) { setAuthError('Escriu la contrasenya.'); return; }
+  if (firstRun) {
+    if (password.length < MIN_PASSWORD) {
+      setAuthError(`La contrasenya ha de tenir com a mínim ${MIN_PASSWORD} caràcters.`);
+      return;
+    }
+    if (password !== $('#auth-confirm').value) { setAuthError('Les contrasenyes no coincideixen.'); return; }
+  }
+  const btn = $('#auth-submit');
+  btn.disabled = true;
+  setAuthError('');
+  try {
+    state.auth = await api(firstRun ? 'auth/setup' : 'auth/login', { method: 'POST', body: { password } });
+    hideAuthScreen();
+    applyMode();
+    await startApp();
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 409) {
+      // Someone else set the password meanwhile (or it comes from the environment).
+      await fetchAuthStatus().catch(() => {});
+      showAuthScreen();
+    }
+    setAuthError(errorMessage(err));
+    $('#auth-password').select();
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function logout() {
+  try { await api('auth/logout', { method: 'POST' }); } catch { /* ignore */ }
+  state.settings = null;
+  try { await fetchAuthStatus(); } catch { /* ignore */ }
+  showAuthScreen();
+}
+
+async function changePassword(event) {
+  event.preventDefault();
+  const current = $('#pw-current').value;
+  const next = $('#pw-new').value;
+  const errorEl = $('#pw-error');
+  const fail = (msg) => { errorEl.textContent = msg; errorEl.hidden = !msg; };
+  if (next.length < MIN_PASSWORD) { fail(`La contrasenya nova ha de tenir com a mínim ${MIN_PASSWORD} caràcters.`); return; }
+  if (next !== $('#pw-confirm').value) { fail('Les contrasenyes noves no coincideixen.'); return; }
+  fail('');
+  const btn = $('#pw-save');
+  btn.disabled = true;
+  try {
+    await api('auth/password', { method: 'PUT', body: { current, new: next } });
+    for (const id of ['#pw-current', '#pw-new', '#pw-confirm']) $(id).value = '';
+    toast("S'ha canviat la contrasenya.", { kind: 'success' });
+  } catch (err) {
+    fail(errorMessage(err));
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function wireAuthUi() {
+  $('#auth-form').addEventListener('submit', submitAuth);
+  $('#auth-show').addEventListener('change', (ev) => {
+    const type = ev.target.checked ? 'text' : 'password';
+    $('#auth-password').type = type;
+    $('#auth-confirm').type = type;
+  });
+  $('#logout-btn').addEventListener('click', logout);
+  $('#password-form').addEventListener('submit', changePassword);
+}
+
+async function boot() {
+  wireStaticUi();
+  wireAuthUi();
+  let status = null;
+  try {
+    status = await fetchAuthStatus();
+  } catch (err) {
+    // Older server without /api/auth: behave like the desktop app.
+    console.warn('Could not read auth status', err);
+  }
+  if (status && status.auth_required && !status.authenticated) {
+    showAuthScreen();
+    return;
+  }
+  await startApp();
 }
 
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);

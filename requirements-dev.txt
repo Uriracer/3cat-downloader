@@ -1,0 +1,4 @@
+# Development: everything + tests and linters used by CI.
+-r requirements-desktop.txt
+pytest>=8.0
+build>=1.2

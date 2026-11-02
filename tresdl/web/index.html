@@ -38,7 +38,28 @@
       <span class="conn-dot" aria-hidden="true"></span>
       <span class="conn-text">Connectant…</span>
     </div>
+    <div class="session" id="session-box" hidden>
+      <span id="mode-badge" class="mode-badge" title="L'aplicació és accessible des de la xarxa local">Mode servidor</span>
+      <button type="button" id="logout-btn" class="btn btn-small" hidden>Tanca la sessió</button>
+    </div>
   </header>
+
+  <!-- ============ LOGIN / FIRST-RUN PASSWORD (server mode) ============ -->
+  <section id="auth-screen" class="auth-screen" hidden aria-labelledby="auth-title">
+    <form id="auth-form" class="auth-card card" novalidate>
+      <h1 id="auth-title">Inicia la sessió</h1>
+      <p id="auth-text" class="muted">Escriu la contrasenya de 3Cat Downloader.</p>
+      <label for="auth-password">Contrasenya</label>
+      <input id="auth-password" type="password" autocomplete="current-password" required maxlength="1024">
+      <div id="auth-confirm-row" hidden>
+        <label for="auth-confirm">Repeteix la contrasenya</label>
+        <input id="auth-confirm" type="password" autocomplete="new-password" maxlength="1024">
+      </div>
+      <label class="check"><input type="checkbox" id="auth-show"> <span>Mostra la contrasenya</span></label>
+      <p id="auth-error" class="form-error" role="alert" aria-live="assertive" hidden></p>
+      <button type="submit" id="auth-submit" class="btn btn-primary btn-lg">Entra</button>
+    </form>
+  </section>
 
   <main id="main" tabindex="-1">
     <!-- ============ SEARCH / BROWSE ============ -->
@@ -66,7 +87,7 @@
           <p id="downloads-summary" class="muted">No hi ha cap descàrrega.</p>
         </div>
         <div class="view-header-actions">
-          <button type="button" id="open-downloads-folder" class="btn">Obrir carpeta de descàrregues</button>
+          <button type="button" id="open-downloads-folder" class="btn desktop-only">Obrir carpeta de descàrregues</button>
           <button type="button" id="clear-finished" class="btn">Netejar finalitzades</button>
         </div>
       </div>
@@ -96,8 +117,9 @@
           <label for="set-download-dir">Carpeta de descàrrega</label>
           <div class="field-row">
             <input id="set-download-dir" name="download_dir" type="text" spellcheck="false" required>
-            <button type="button" id="set-open-dir" class="btn">Obrir carpeta</button>
+            <button type="button" id="set-open-dir" class="btn desktop-only">Obrir carpeta</button>
           </div>
+          <p id="download-dir-lock" class="help lock-hint" hidden></p>
 
           <label for="set-template">Plantilla de nom de fitxer</label>
           <div class="field-row">
@@ -161,13 +183,14 @@
 
         <fieldset class="card">
           <legend>Integració amb Sonarr / Radarr</legend>
-          <p class="help">Aquesta clau serveix per a la futura integració amb Sonarr/Radarr. De moment no cal fer-ne res.</p>
+          <p class="help">Aquesta clau permet que altres programes (Sonarr, Radarr, scripts) facin servir l'aplicació sense contrasenya. Envia-la a la capçalera <code>X-Api-Key</code>. No la comparteixis.</p>
           <label for="set-api-key">Clau de l'API</label>
           <div class="field-row">
             <input id="set-api-key" type="text" readonly spellcheck="false" class="mono">
             <button type="button" id="set-copy-key" class="btn">Copiar</button>
           </div>
-          <p class="help">Adreça del servidor local: <code id="set-server-url">—</code></p>
+          <p id="api-key-lock" class="help lock-hint" hidden></p>
+          <p class="help">Adreça del servidor: <code id="set-server-url">—</code></p>
         </fieldset>
 
         <div class="settings-actions">
@@ -175,6 +198,29 @@
           <button type="button" id="settings-discard" class="btn" disabled>Desfés els canvis</button>
           <button type="submit" id="settings-save" class="btn btn-primary" disabled>Desa la configuració</button>
         </div>
+      </form>
+
+      <form id="password-form" class="settings" hidden novalidate>
+        <fieldset class="card">
+          <legend>Seguretat</legend>
+          <p class="help">Canvia la contrasenya d'accés. Es tancaran les sessions obertes als altres dispositius.</p>
+          <label for="pw-current">Contrasenya actual</label>
+          <input id="pw-current" type="password" autocomplete="current-password" maxlength="1024">
+          <div class="grid-2">
+            <div>
+              <label for="pw-new">Contrasenya nova</label>
+              <input id="pw-new" type="password" autocomplete="new-password" minlength="8" maxlength="1024">
+            </div>
+            <div>
+              <label for="pw-confirm">Repeteix la contrasenya nova</label>
+              <input id="pw-confirm" type="password" autocomplete="new-password" maxlength="1024">
+            </div>
+          </div>
+          <p id="pw-error" class="form-error" role="alert" hidden></p>
+          <div class="settings-actions">
+            <button type="submit" id="pw-save" class="btn btn-primary">Canvia la contrasenya</button>
+          </div>
+        </fieldset>
       </form>
     </section>
   </main>

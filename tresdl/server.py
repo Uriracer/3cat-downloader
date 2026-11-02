@@ -14,9 +14,12 @@ Design notes
 * ``/api/events`` is a Server-Sent Events stream. The manager has a single
   subscription (:class:`EventBroadcaster`) that fans every job change out to
   one ``asyncio.Queue`` per connected client via ``loop.call_soon_threadsafe``.
-* The server must only be bound to 127.0.0.1. As defence in depth against DNS
+* Desktop mode (bound to 127.0.0.1): as defence in depth against DNS
   rebinding / cross-site requests, unknown ``Host`` headers and foreign
   ``Origin`` headers on state-changing requests are rejected with 403.
+* Server mode (LAN, Docker...): login or API key required for ``/api/*``
+  (see :mod:`tresdl.auth`), any ``Host`` unless restricted, and
+  state-changing requests must be same-origin (CSRF protection).
 * Sibling modules (api, config, downloader) are imported lazily, only when
   :func:`create_app` has to build a default instance, so importing this module
   never fails because of them.
@@ -37,18 +40,20 @@ from contextlib import asynccontextmanager
 from enum import Enum
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, AsyncIterator, Callable, Literal, Optional, Protocol
-from urllib.parse import urlsplit
+from urllib.parse import parse_qs, urlsplit
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.concurrency import run_in_threadpool
-from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, JSONResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, ValidationError
 from starlette.datastructures import Headers, MutableHeaders
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
+from .auth import COOKIE_NAME, SESSION_SECONDS, AuthManager, password_problem
 from .models import DownloadJob, Episode
+from .runtime import LOCKABLE_FIELDS, RuntimeConfig
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from .config import Settings
@@ -140,15 +145,32 @@ class SettingsStore:
     """
 
     def __init__(self, loader: Callable[[], Any] | None = None,
-                 saver: Callable[[Any], None] | None = None) -> None:
+                 saver: Callable[[Any], None] | None = None,
+                 overrides: Optional[dict[str, Any]] = None) -> None:
         if loader is None or saver is None:
             from . import config  # lazy: sibling module
 
             loader = loader or config.load_settings
             saver = saver or config.save_settings
+            if overrides is None:
+                overrides = env_overrides()
         self._saver = saver
         self._lock = threading.Lock()
-        self._settings = loader()
+        #: Values forced by environment variables (never written to disk).
+        self._overrides: dict[str, Any] = dict(overrides or {})
+        self._stored = loader()
+        self._settings = self._overlay(self._stored)
+
+    def _overlay(self, settings: Any) -> Any:
+        if not self._overrides or not dataclasses.is_dataclass(settings):
+            return settings
+        known = {f.name for f in dataclasses.fields(settings)}
+        return dataclasses.replace(settings, **{k: v for k, v in self._overrides.items() if k in known})
+
+    @property
+    def locked(self) -> list[str]:
+        """Settings fields forced by the environment (read-only in the UI)."""
+        return sorted(self._overrides)
 
     def get(self) -> "Settings":
         with self._lock:
@@ -156,9 +178,35 @@ class SettingsStore:
 
     def set(self, settings: "Settings") -> "Settings":
         with self._lock:
-            self._saver(settings)
-            self._settings = settings
-            return settings
+            stored = settings
+            if self._overrides and dataclasses.is_dataclass(settings):
+                # Keep the user's own values on disk for forced fields.
+                stored = dataclasses.replace(settings, **{
+                    k: getattr(self._stored, k) for k in self._overrides if hasattr(self._stored, k)})
+            self._saver(stored)
+            self._stored = stored
+            self._settings = self._overlay(stored)
+            return self._settings
+
+
+def env_overrides() -> dict[str, Any]:
+    """Settings values forced by ``TRESDL_DOWNLOAD_DIR`` / ``TRESDL_API_KEY``."""
+    out: dict[str, Any] = {}
+    for name, var in LOCKABLE_FIELDS.items():
+        value = (os.environ.get(var) or "").strip()
+        if value:
+            out[name] = str(_expand_user(value)) if name == "download_dir" else value
+    return out
+
+
+#: Settings fields never sent to (or accepted from) clients.
+PRIVATE_SETTINGS = frozenset({"password_hash"})
+
+
+def public_settings(settings: Any, locked: list[str]) -> dict[str, Any]:
+    data = {k: v for k, v in dataclasses.asdict(settings).items() if k not in PRIVATE_SETTINGS}
+    data["locked"] = list(locked)
+    return data
 
 
 # --------------------------------------------------------------------------- #
@@ -284,6 +332,15 @@ class OpenFolderRequest(BaseModel):
     job_id: Optional[str] = None
 
 
+class PasswordRequest(BaseModel):
+    password: str = Field(min_length=1, max_length=1024)
+
+
+class ChangePasswordRequest(BaseModel):
+    current: str = Field(default="", max_length=1024)
+    new: str = Field(min_length=1, max_length=1024)
+
+
 class NamingPreviewRequest(BaseModel):
     model_config = ConfigDict(extra="ignore")
     filename_template: str = Field(default="", max_length=500)
@@ -354,21 +411,11 @@ async def _call(fn: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
         raise HTTPException(status_code=404 if not_found else 502, detail=detail) from exc
 
 
-_ffmpeg_cache: dict[str, Optional[str]] = {}
-
-
 def _ffmpeg_path() -> Optional[str]:
     """Path to the ffmpeg binary that downloads will use, or None if missing."""
-    if "path" not in _ffmpeg_cache:
-        path: Optional[str]
-        try:
-            import imageio_ffmpeg
+    from .runtime import find_ffmpeg
 
-            path = imageio_ffmpeg.get_ffmpeg_exe()
-        except Exception:
-            path = shutil.which("ffmpeg")
-        _ffmpeg_cache["path"] = path
-    return _ffmpeg_cache["path"]
+    return find_ffmpeg()[0]
 
 
 def _norm(path: Path) -> str:
@@ -493,32 +540,107 @@ def _hostname(netloc: str) -> str:
         return ""
 
 
+#: ``/api`` paths reachable without logging in.
+AUTH_EXEMPT_PATHS = frozenset({
+    "/api/health", "/api/auth/status", "/api/auth/setup", "/api/auth/login", "/api/auth/logout",
+})
+
+
+def _client_address(scope: Scope, headers: Headers, trust_proxy: bool) -> str:
+    if trust_proxy:
+        forwarded = headers.get("x-forwarded-for", "")
+        if forwarded:
+            return forwarded.split(",")[0].strip()[:64] or "?"
+    client = scope.get("client")
+    return str(client[0]) if client else "?"
+
+
+def _is_https(scope: Scope, headers: Headers, trust_proxy: bool) -> bool:
+    if scope.get("scheme") == "https":
+        return True
+    return trust_proxy and headers.get("x-forwarded-proto", "").split(",")[0].strip().lower() == "https"
+
+
+def _parse_cookies(raw: str) -> dict[str, str]:
+    out: dict[str, str] = {}
+    for part in raw.split(";"):
+        name, sep, value = part.strip().partition("=")
+        if sep and name and name not in out:
+            out[name] = value.strip().strip('"')
+    return out
+
+
+def _request_authenticated(scope: Scope, headers: Headers, auth: AuthManager) -> bool:
+    key = headers.get("x-api-key")
+    if key is None:
+        values = parse_qs(scope.get("query_string", b"").decode("latin-1")).get("apikey")
+        key = values[0] if values else None
+    if key is not None and auth.check_api_key(key):
+        return True
+    return auth.check_session(_parse_cookies(headers.get("cookie", "")).get(COOKIE_NAME))
+
+
 class LocalGuardMiddleware:
-    """Pure ASGI middleware: host/origin checks and Cache-Control headers.
+    """Pure ASGI middleware: host/origin/auth checks and Cache-Control headers.
 
     Implemented without ``BaseHTTPMiddleware`` so streaming (SSE) responses
-    are not buffered or wrapped.
+    are not buffered or wrapped. Fills ``scope["state"]`` with
+    ``authenticated``, ``client_address`` and ``https``.
     """
 
-    def __init__(self, app: ASGIApp, allowed_hosts: frozenset[str]) -> None:
+    def __init__(self, app: ASGIApp, allowed_hosts: Optional[frozenset[str]],
+                 runtime: Optional[RuntimeConfig] = None, auth: Optional[AuthManager] = None) -> None:
         self.app = app
         self.allowed_hosts = allowed_hosts
+        self.runtime = runtime or RuntimeConfig()
+        self.auth = auth
+
+    async def _deny(self, scope: Scope, receive: Receive, send: Send, status: int, detail: str) -> None:
+        await JSONResponse({"detail": detail}, status_code=status,
+                           headers={"Cache-Control": "no-store"})(scope, receive, send)
+
+    def _same_origin_ok(self, headers: Headers) -> bool:
+        """CSRF rule for state-changing requests."""
+        source = headers.get("origin")
+        if source is None:
+            source = headers.get("referer")
+            if source is None:
+                return True  # not a browser (curl, Sonarr...): auth still applies
+        if source.strip().lower() == "null":
+            return False
+        try:
+            netloc = urlsplit(source.strip()).netloc.lower()
+        except ValueError:
+            return False
+        if not self.runtime.server:
+            return _hostname(netloc) in (self.allowed_hosts or frozenset())
+        return bool(netloc) and netloc == headers.get("host", "").strip().lower()
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] != "http":
             await self.app(scope, receive, send)
             return
         headers = Headers(scope=scope)
-        if _hostname(headers.get("host", "")) not in self.allowed_hosts:
-            await JSONResponse({"detail": "Host no permès."}, status_code=403)(scope, receive, send)
+        if self.allowed_hosts is not None and _hostname(headers.get("host", "")) not in self.allowed_hosts:
+            await self._deny(scope, receive, send, 403, "Host no permès.")
             return
-        if scope["method"] not in ("GET", "HEAD", "OPTIONS"):
-            origin = headers.get("origin")
-            if origin is not None and _hostname(urlsplit(origin).netloc) not in self.allowed_hosts:
-                await JSONResponse({"detail": "Origen no permès."}, status_code=403)(scope, receive, send)
-                return
+        if scope["method"] not in ("GET", "HEAD", "OPTIONS") and not self._same_origin_ok(headers):
+            await self._deny(scope, receive, send, 403, "Origen no permès.")
+            return
 
         path: str = scope.get("path", "")
+        authenticated = True
+        if self.auth is not None and self.auth.required:
+            authenticated = _request_authenticated(scope, headers, self.auth)
+            is_api = path == "/api" or path.startswith("/api/")
+            if is_api and path not in AUTH_EXEMPT_PATHS and not authenticated:
+                await self._deny(scope, receive, send, 401, "Cal iniciar sessió.")
+                return
+        state = scope.setdefault("state", {})
+        state["authenticated"] = authenticated
+        state["client_address"] = _client_address(scope, headers, self.runtime.trust_proxy)
+        state["https"] = _is_https(scope, headers, self.runtime.trust_proxy)
+
         if path.startswith("/api/") or path == "/" or path.endswith((".html", "/")):
             cache_control = "no-store"
         else:
@@ -548,7 +670,9 @@ def create_app(client: Optional[ClientLike] = None,
                settings_store: Optional[SettingsStoreLike] = None,
                *,
                web_dir: Optional[Path] = None,
-               allowed_hosts: Optional[frozenset[str]] = None) -> FastAPI:
+               allowed_hosts: Optional[frozenset[str]] = None,
+               runtime: Optional[RuntimeConfig] = None,
+               auth: Optional[AuthManager] = None) -> FastAPI:
     """Build the FastAPI app.
 
     Missing collaborators are created with their defaults (lazy imports). A
@@ -558,6 +682,9 @@ def create_app(client: Optional[ClientLike] = None,
     ``app.state.events`` is the :class:`EventBroadcaster`; call its ``close()``
     before shutting the HTTP server down so open SSE streams end promptly.
     """
+    rt = runtime or RuntimeConfig()
+    if allowed_hosts is not None:  # explicit argument wins (tests, embedding)
+        rt = dataclasses.replace(rt, allowed_hosts=allowed_hosts)
     if settings_store is None:
         settings_store = SettingsStore()
     if client is None:
@@ -576,6 +703,13 @@ def create_app(client: Optional[ClientLike] = None,
 
     events = EventBroadcaster()
     mgr.subscribe(events.publish)
+    if auth is None:
+        auth = AuthManager(required=rt.auth_required, settings_get=store.get,
+                           settings_set=store.set, password_env=rt.password_env)
+    authm: AuthManager = auth
+
+    def locked_fields() -> list[str]:
+        return list(getattr(store, "locked", []) or [])
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
@@ -590,8 +724,7 @@ def create_app(client: Optional[ClientLike] = None,
 
     app = FastAPI(title="3Cat Downloader", version=APP_VERSION, lifespan=lifespan,
                   docs_url="/api/docs", redoc_url=None, openapi_url="/api/openapi.json")
-    app.add_middleware(LocalGuardMiddleware,
-                       allowed_hosts=DEFAULT_ALLOWED_HOSTS if allowed_hosts is None else allowed_hosts)
+    app.add_middleware(LocalGuardMiddleware, allowed_hosts=rt.allowed_hosts, runtime=rt, auth=authm)
 
     @app.exception_handler(RequestValidationError)
     async def validation_error(_request: Any, exc: RequestValidationError) -> JSONResponse:
@@ -602,6 +735,8 @@ def create_app(client: Optional[ClientLike] = None,
     app.state.manager = mgr
     app.state.settings_store = store
     app.state.events = events
+    app.state.runtime = rt
+    app.state.auth = authm
 
     def require_job(job_id: str) -> None:
         if mgr.get(job_id) is None:
@@ -609,10 +744,92 @@ def create_app(client: Optional[ClientLike] = None,
 
     # ----------------------------------------------------------------- health
     @app.get("/api/health")
-    async def health() -> dict[str, Any]:
-        ffmpeg = await run_in_threadpool(_ffmpeg_path)
-        return {"ok": True, "version": APP_VERSION, "ffmpeg": bool(ffmpeg),
-                "ffmpeg_path": ffmpeg, "app": APP_ID}
+    async def health(request: Request) -> dict[str, Any]:
+        if rt.server and not request.state.authenticated:
+            return {"ok": True, "version": APP_VERSION, "app": APP_ID}
+        from .runtime import find_ffmpeg
+
+        ffmpeg, ffmpeg_error = await run_in_threadpool(find_ffmpeg)
+        return {"ok": True, "version": APP_VERSION, "app": APP_ID, "mode": rt.mode,
+                "ffmpeg": bool(ffmpeg), "ffmpeg_path": ffmpeg, "ffmpeg_error": ffmpeg_error}
+
+    # --------------------------------------------------------------- auth
+    def auth_status(request: Request) -> dict[str, Any]:
+        return {"mode": rt.mode, "auth_required": authm.required, "configured": authm.configured,
+                "authenticated": bool(request.state.authenticated),
+                "password_from_env": authm.password_from_env}
+
+    def set_session_cookie(request: Request, response: Response) -> None:
+        response.set_cookie(COOKIE_NAME, authm.issue_session(), max_age=SESSION_SECONDS, path="/",
+                            httponly=True, samesite="strict", secure=bool(request.state.https))
+
+    def throttled(request: Request) -> None:
+        wait = authm.throttle.retry_after(request.state.client_address)
+        if wait:
+            raise HTTPException(status_code=429, detail="Massa intents. Espera un minut i torna-ho a provar.",
+                                headers={"Retry-After": str(wait)})
+
+    def require_auth_enabled() -> None:
+        if not authm.required:
+            raise HTTPException(status_code=400, detail="L'inici de sessió no està activat.")
+
+    @app.get("/api/auth/status")
+    async def get_auth_status(request: Request) -> dict[str, Any]:
+        return auth_status(request)
+
+    @app.post("/api/auth/setup")
+    async def auth_setup(body: PasswordRequest, request: Request, response: Response) -> dict[str, Any]:
+        require_auth_enabled()
+        if authm.configured:
+            raise HTTPException(status_code=409, detail="La contrasenya ja està configurada.")
+        problem = password_problem(body.password)
+        if problem:
+            raise HTTPException(status_code=400, detail=problem)
+        await run_in_threadpool(authm.set_password, body.password)
+        log.info("Contrasenya inicial configurada des de %s", request.state.client_address)
+        set_session_cookie(request, response)
+        request.state.authenticated = True
+        return auth_status(request)
+
+    @app.post("/api/auth/login")
+    async def auth_login(body: PasswordRequest, request: Request, response: Response) -> dict[str, Any]:
+        require_auth_enabled()
+        if not authm.configured:
+            raise HTTPException(status_code=409, detail="Primer cal crear una contrasenya.")
+        throttled(request)
+        ok = await run_in_threadpool(authm.check_password, body.password)
+        if not ok:
+            authm.throttle.failure(request.state.client_address)
+            log.warning("Inici de sessió fallit des de %s", request.state.client_address)
+            raise HTTPException(status_code=401, detail="Contrasenya incorrecta.")
+        authm.throttle.success(request.state.client_address)
+        set_session_cookie(request, response)
+        request.state.authenticated = True
+        return auth_status(request)
+
+    @app.post("/api/auth/logout")
+    async def auth_logout(request: Request, response: Response) -> dict[str, Any]:
+        response.delete_cookie(COOKIE_NAME, path="/", httponly=True, samesite="strict")
+        request.state.authenticated = False
+        return auth_status(request)
+
+    @app.put("/api/auth/password")
+    async def auth_change_password(body: ChangePasswordRequest, request: Request,
+                                   response: Response) -> dict[str, Any]:
+        require_auth_enabled()
+        if authm.password_from_env:
+            raise HTTPException(status_code=400,
+                                detail="La contrasenya està definida per la variable d'entorn TRESDL_PASSWORD.")
+        throttled(request)
+        if authm.configured and not await run_in_threadpool(authm.check_password, body.current):
+            authm.throttle.failure(request.state.client_address)
+            raise HTTPException(status_code=400, detail="La contrasenya actual no és correcta.")
+        problem = password_problem(body.new)
+        if problem:
+            raise HTTPException(status_code=400, detail=problem)
+        await run_in_threadpool(authm.set_password, body.new)
+        set_session_cookie(request, response)  # the old secret is gone: new cookie
+        return {"ok": True}
 
     # ---------------------------------------------------------- catalogue
     @app.get("/api/search")
@@ -704,19 +921,28 @@ def create_app(client: Optional[ClientLike] = None,
     # ----------------------------------------------------------- settings
     @app.get("/api/settings")
     async def get_settings() -> dict[str, Any]:
-        return dataclasses.asdict(store.get())
+        return public_settings(store.get(), locked_fields())
 
     @app.put("/api/settings")
     async def put_settings(body: dict[str, Any]) -> dict[str, Any]:
+        current = store.get()
+        changes = {k: v for k, v in body.items() if k not in PRIVATE_SETTINGS and k != "locked"}
+        for name in locked_fields():
+            if name in changes and str(changes[name]) != str(getattr(current, name, "")):
+                var = LOCKABLE_FIELDS.get(name, "")
+                raise HTTPException(status_code=400,
+                                    detail=f"Aquest valor està definit per la variable d'entorn {var} "
+                                           "i no es pot canviar des d'aquí.")
+            changes.pop(name, None)
         try:
-            new = validate_settings(store.get(), body)
+            new = validate_settings(current, changes)
         except ValueError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
         saved = await run_in_threadpool(store.set, new)
         refresh = getattr(mgr, "refresh_workers", None)
         if callable(refresh):  # apply a new max_parallel to queued work at once
             await run_in_threadpool(refresh)
-        return dataclasses.asdict(saved)
+        return public_settings(saved, locked_fields())
 
     @app.post("/api/naming/preview")
     async def naming_preview(body: NamingPreviewRequest) -> dict[str, Any]:
@@ -734,6 +960,8 @@ def create_app(client: Optional[ClientLike] = None,
 
     @app.post("/api/open-folder")
     async def open_folder(body: Optional[OpenFolderRequest] = None) -> dict[str, Any]:
+        if rt.server:
+            raise HTTPException(status_code=400, detail="No disponible en mode servidor.")
         root = _expand_user(store.get().download_dir)
         if body is not None and body.job_id:
             job = await run_in_threadpool(mgr.get, body.job_id)

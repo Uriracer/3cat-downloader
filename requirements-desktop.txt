@@ -1,0 +1,4 @@
+# Desktop app (Windows): runtime + window + packaging.
+-r requirements.txt
+pywebview>=5.0
+pyinstaller>=6.6
