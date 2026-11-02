@@ -1,0 +1,29 @@
+[Unit]
+Description=3Cat Downloader (descàrregues de 3cat)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=tresdl
+Group=tresdl
+EnvironmentFile=/etc/3cat-downloader/3cat-downloader.env
+ExecStart=/opt/3cat-downloader/venv/bin/tresdl --no-gui
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=20
+UMask=0002
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+ReadWritePaths=/var/lib/3cat-downloader
+ReadWritePaths=-/srv/media/3cat
+
+[Install]
+WantedBy=multi-user.target
