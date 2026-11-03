@@ -40,6 +40,11 @@ def ascii_fold(text: str) -> str:
     return "".join(c for c in text if not unicodedata.combining(c))
 
 
+def normalize(text: str) -> str:
+    """Lower-case ASCII words: "Merlí (2015)" -> "merli 2015"."""
+    return " ".join(re.findall(r"[a-z0-9]+", ascii_fold(text or "").lower().replace("&", " and ")))
+
+
 def dotted(text: str, max_len: int = 80) -> str:
     """Scene-style name part: ASCII, words joined with dots."""
     words = re.findall(r"[A-Za-z0-9]+", ascii_fold(text).replace("'", ""))
@@ -183,6 +188,8 @@ class Release:
     comments: str = ""
     guid: str = ""
     tvdb_id: Optional[int] = None         # lets Sonarr match it when the titles differ
+    tmdb_id: Optional[int] = None         # same for Radarr
+    imdb_id: str = ""                     # "tt0385880"
 
 
 def _rfc822(iso_date: Optional[str]) -> str:
@@ -207,6 +214,10 @@ def rss_feed(releases: list[Release], *, base_url: str, api_key: str,
             attrs.append(("episode", str(rel.episode)))
         if rel.tvdb_id:
             attrs.append(("tvdbid", str(rel.tvdb_id)))
+        if rel.tmdb_id:
+            attrs.append(("tmdbid", str(rel.tmdb_id)))
+        if rel.imdb_id.lower().removeprefix("tt").isdigit():
+            attrs.append(("imdb", rel.imdb_id.lower().removeprefix("tt")))   # Radarr reads digits only
         attrs.append(("language", "Catalan"))
         attr_xml = "".join(f'<newznab:attr name="{n}" value="{escape(v)}"/>' for n, v in attrs)
         items.append(
@@ -245,7 +256,7 @@ def caps_xml() -> str:
         "<searching>"
         '<search available="yes" supportedParams="q"/>'
         '<tv-search available="yes" supportedParams="q,season,ep,tvdbid,tvmazeid"/>'
-        '<movie-search available="yes" supportedParams="q"/>'
+        '<movie-search available="yes" supportedParams="q,imdbid,tmdbid"/>'
         "</searching>"
         "<categories>"
         f'<category id="{CAT_MOVIES}" name="Movies">'

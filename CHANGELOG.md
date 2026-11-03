@@ -2,6 +2,21 @@
 
 Format basat en [Keep a Changelog](https://keepachangelog.com/ca/1.1.0/); versions [SemVer](https://semver.org/lang/ca/).
 
+## [0.4.0] - 2026-11-03
+
+### Afegit
+- **Capítols nous automàtics amb títols diferents**: la llista de novetats que Sonarr consulta
+  fa servir el títol i la numeració de TheTVDB i n'inclou l'identificador. Els programes
+  s'identifiquen en segon pla, sense fer esperar Sonarr.
+- **Radarr per identificador**: cerques per TMDB i IMDb. La pel·lícula es troba pel títol
+  original o per la traducció catalana o castellana (*13 Minutes* és *13 minuts per matar
+  Hitler*). Si Radarr busca pel títol i l'any, també es busca a TMDB.
+- **Numeració de TheTVDB**: si 3cat agrupa els capítols en temporades diferents, es
+  renumeren com a TheTVDB (per ordre, o per data d'emissió).
+- Les dades de TVmaze, TheTVDB i TMDB es desen a `arr_metadata.json` i sobreviuen als
+  reinicis. Les consultes a TVmaze respecten el seu límit de peticions.
+- Guia i pila per a **Docker Swarm** ([docs/swarm.md](docs/swarm.md)).
+
 ## [0.3.2] - 2026-11-03
 
 ### Corregit

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import copy
+import time
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -33,17 +34,23 @@ MERLI = [ep(1, 1, 1, "Els peripatètics"), ep(2, 1, 2, "Plató"), ep(3, 2, 1, "M
 GENESI = [ep(20 + n, 1, n, f"Capítol {n}", program_id=76716, series="Gènesi", date="2026-09-21")
           for n in (1, 2, 3)]
 TN = [ep(10, None, None, "Telenotícies migdia", program_id=777, series="Telenotícies", date="2026-11-02")]
+PLATS = [ep(30 + n, 1, n, f"Tinc {n}", program_id=126706100, series="Plats bruts", date=f"1999-04-{n:02d}")
+         for n in (1, 2, 3, 4)]          # 3cat: one season of 4; TheTVDB: two seasons of 2
 FILMS = [Episode(id=50, program_id=0, program_title="Monster house", title="Monster house",
-                 raw_title="Monster house", air_date="2026-10-24", duration_seconds=5175)]
+                 raw_title="Monster house", air_date="2026-10-24", duration_seconds=5175),
+         Episode(id=51, program_id=0, program_title="13 minuts per matar Hitler",
+                 title="13 minuts per matar Hitler", raw_title="13 minuts per matar Hitler",
+                 air_date="2026-10-20", duration_seconds=6840)]
 
 
 class Client:
     def __init__(self) -> None:
         self.programs = [Program(id=54076, slug="merli", title="Merlí"),
                          Program(id=76716, slug="genesi", title="Gènesi"),
+                         Program(id=126706100, slug="plats-bruts", title="Plats bruts"),
                          Program(id=99, slug="merli-sapere-aude", title="Merlí. Sapere aude"),
                          Program(id=777, slug="telenoticies", title="Telenotícies")]
-        self.episodes = {54076: MERLI, 76716: GENESI, 99: [ep(90, 1, 1, "Altres", program_id=99, series="Merlí. Sapere aude")],
+        self.episodes = {54076: MERLI, 76716: GENESI, 126706100: PLATS, 99: [ep(90, 1, 1, "Altres", program_id=99, series="Merlí. Sapere aude")],
                          777: TN}
 
     def search(self, query: str, limit: int = 30) -> list[Program]:
@@ -60,10 +67,10 @@ class Client:
         return copy.deepcopy(FILMS)
 
     def recent_episodes(self, limit: int = 200) -> list[Episode]:
-        return copy.deepcopy(MERLI[:1] + TN)
+        return copy.deepcopy(MERLI[:1] + TN + GENESI[:1])
 
     def get_episode(self, video_id: int) -> Episode:
-        for e in MERLI + GENESI + TN + FILMS:
+        for e in MERLI + GENESI + PLATS + TN + FILMS:
             if e.id == video_id:
                 return copy.deepcopy(e)
         raise LookupError(video_id)
@@ -116,7 +123,32 @@ TVMAZE = {   # what TVmaze / SkyHook answer, keyed by URL
         "id": 94234, "name": "Gènesi", "officialSite": "https://www.3cat.cat/3cat/genesi/",
         "externals": {"thetvdb": 480821}},
     "https://api.tvmaze.com/shows/94234/akas": [],
-    "https://skyhook.sonarr.tv/v1/tvdb/shows/en/480821": {"title": "Genesis (2026)"},
+    "https://skyhook.sonarr.tv/v1/tvdb/shows/en/480821": {"title": "Genesis (2026)", "episodes": [
+        {"seasonNumber": 1, "episodeNumber": n, "airDate": "2026-09-21"} for n in (1, 2, 3)]},
+    "https://api.tvmaze.com/lookup/shows?thetvdb=84710": {
+        "id": 32662, "name": "Plats Bruts", "officialSite": None, "externals": {"thetvdb": 84710}},
+    "https://api.tvmaze.com/shows/32662/akas": [],
+    "https://skyhook.sonarr.tv/v1/tvdb/shows/en/84710": {"title": "Dirty Linen", "episodes": [
+        {"seasonNumber": 0, "episodeNumber": 1, "airDate": None},
+        {"seasonNumber": 1, "episodeNumber": 1, "airDate": "1999-04-01"},
+        {"seasonNumber": 1, "episodeNumber": 2, "airDate": "1999-04-02"},
+        {"seasonNumber": 2, "episodeNumber": 1, "airDate": "1999-04-03"},
+        {"seasonNumber": 2, "episodeNumber": 2, "airDate": "1999-04-04"}]},
+    "https://api.tvmaze.com/search/shows?q=Gènesi": [
+        {"show": {"id": 7, "name": "Genesi", "language": "Italian", "externals": {"thetvdb": 1}}},
+        {"show": {"id": 94234, "name": "Gènesi", "language": "Catalan", "network": {"name": "TV3"},
+                  "externals": {"thetvdb": 480821}}}],
+    "https://api.radarr.video/v1/movie/319337": {
+        "TmdbId": 319337, "ImdbId": "tt1708135", "Title": "13 Minutes", "OriginalTitle": "Elser – Er hätte die Welt verändert", "Year": 2015,
+        "Translations": [{"Title": "13 minuts per matar Hitler", "Language": "ca-ES"},
+                         {"Title": "13 minutos para matar a Hitler", "Language": "es-ES"},
+                         {"Title": "Monster house", "Language": "fr-FR"}],
+        "AlternativeTitles": []},
+    "https://api.radarr.video/v1/movie/imdb/tt1708135": [{
+        "TmdbId": 319337, "ImdbId": "tt1708135", "Title": "13 Minutes", "OriginalTitle": "Elser – Er hätte die Welt verändert", "Year": 2015,
+        "Translations": [{"Title": "13 minuts per matar Hitler", "Language": "ca"}]}],
+    "https://api.radarr.video/v1/search?q=13 Minutes&year=2015": [
+        {"TmdbId": 319337, "Title": "13 Minutes", "Year": 2015}],
     "https://api.tvmaze.com/lookup/shows?thetvdb=82712": {"id": 1, "name": "Genesis", "officialSite": ""},
     "https://api.tvmaze.com/shows/1/akas": [],
     "https://skyhook.sonarr.tv/v1/tvdb/shows/en/82712": {"title": "Genesis (2005)"},
@@ -130,10 +162,9 @@ TVMAZE = {   # what TVmaze / SkyHook answer, keyed by URL
 
 
 def fake_fetch(url: str, params: dict):
+    """Canned answers; anything else is "not found" (404)."""
     full = url + ("?" + "&".join(f"{k}={v}" for k, v in params.items()) if params else "")
-    if full not in TVMAZE:
-        raise AssertionError(f"unexpected request {full}")
-    return copy.deepcopy(TVMAZE[full])
+    return copy.deepcopy(TVMAZE.get(full))
 
 
 @pytest.fixture(autouse=True)
@@ -202,6 +233,7 @@ def test_caps_and_api_key(arr) -> None:
     http = arr["http"]
     caps = ET.fromstring(newznab(http, t="caps"))
     assert caps.find("searching/tv-search").get("supportedParams") == "q,season,ep,tvdbid,tvmazeid"
+    assert caps.find("searching/movie-search").get("supportedParams") == "q,imdbid,tmdbid"
     assert {c.get("id") for c in caps.iter("category")} == {"2000", "5000"}
     bad = http.get("/arr/newznab/api", params={"t": "caps", "apikey": "dolenta"})
     assert ET.fromstring(bad.text).get("code") == "100"
@@ -240,11 +272,17 @@ def test_tvsearch_by_tvdbid_uses_original_title(arr) -> None:
     one = items(newznab(http, t="tvsearch", tvmazeid="94234", season="1", ep="2"))
     assert [(f["title"].split(".CATALAN")[0], f["tvdbid"]) for f in one] == [("Genesis.2026.S01E02", "480821")]
     assert items(newznab(http, t="tvsearch", tvdbid="82712", season="1", ep="1")) == []   # not on 3cat
+    # TheTVDB numbers it differently (2 seasons of 2, 3cat: 1 season of 4): Sonarr gets its numbering.
+    s2 = items(newznab(http, t="tvsearch", tvdbid="84710", season="2"))
+    assert [f["title"].split(".CATALAN")[0] for f in s2] == [
+        "Dirty.Linen.S02", "Dirty.Linen.S02E01.Tinc.3", "Dirty.Linen.S02E02.Tinc.4"]
+    pack = rl.Token.decode(s2[0]["link"].split("/arr/nzb/")[1].split(".nzb")[0])
+    assert pack.videos == [33, 34] and pack.names["33"].startswith("Dirty.Linen.S02E01")
     # Merlí by title still works and carries no id.
     assert "tvdbid" not in items(newznab(http, t="tvsearch", q="Merlí", season="1", ep="1"))[0]
 
 
-def test_series_lookup_caches_and_survives_failures() -> None:
+def test_series_lookup_caches_and_survives_failures(tmp_path: Path) -> None:
     from tresdl.arr.lookup import SeriesLookup
     calls: list[str] = []
 
@@ -252,32 +290,88 @@ def test_series_lookup_caches_and_survives_failures() -> None:
         calls.append(url)
         return fake_fetch(url, params)
 
-    lookup = SeriesLookup(fetch)
+    lookup = SeriesLookup(fetch, cache_dir=tmp_path)
     info = lookup.find(tvdb_id=480821)
-    assert info.names == ["Gènesi", "genesi"] and info.sonarr_title == "Genesis (2026)"
-    assert info.tvmaze_id == 94234 and lookup.find(tvdb_id=480821) is info and len(calls) == 3
+    assert info.names == ["Gènesi"] and info.sonarr_title == "Genesis (2026)"
+    assert info.episodes == [[1, 1, "2026-09-21"], [1, 2, "2026-09-21"], [1, 3, "2026-09-21"]]
+    assert info.tvmaze_id == 94234 and lookup.find(tvdb_id=480821) == info and len(calls) == 3
     assert lookup.find() is None
 
     def broken(url, params):
         raise OSError("offline")
 
     assert SeriesLookup(broken).find(tvdb_id=480821) is None
+    # Cached on disk: a restart offline still knows it.
+    assert SeriesLookup(broken, cache_dir=tmp_path).find(tvdb_id=480821) == info
+    (tmp_path / "arr_metadata.json").write_text("{trencat", encoding="utf-8")
+    assert SeriesLookup(broken, cache_dir=tmp_path).find(tvdb_id=480821) is None   # corrupt file: ignored
+
+
+def test_programme_to_tvdb_needs_a_catalan_show() -> None:
+    from tresdl.arr.lookup import SeriesLookup
+    lookup = SeriesLookup(fake_fetch, background=False)
+    assert lookup.programme_series("Gènesi").tvdb_id == 480821     # the Italian "Genesi" is skipped
+    assert lookup.programme_series("Merlí") is None
+    assert lookup.programme_series_cached("Telenotícies") is None  # unknown, no background: nothing
+
+
+def test_remap_numbers() -> None:
+    from tresdl.arr.indexer import remap_numbers
+    tvdb = [[1, 1, "1999-04-01"], [1, 2, "1999-04-02"], [2, 1, "1999-04-03"], [2, 2, "1999-04-04"], [0, 1, None]]
+
+    def nums(eps):
+        return [(e.season_number, e.episode_number) for e in eps]
+
+    same = [ep(1, 1, 1, "a"), ep(2, 2, 2, "b")]
+    assert remap_numbers(same, tvdb) is same                                   # all exist: untouched
+    assert nums(remap_numbers(copy.deepcopy(PLATS), tvdb)) == [(1, 1), (1, 2), (2, 1), (2, 2)]   # in order
+    odd = [ep(1, 1, 1, "a", date="1999-04-01"), ep(2, 1, 7, "b", date="1999-04-04"),
+           ep(3, 1, 8, "c", date="2001-01-01")]
+    assert nums(remap_numbers(odd, tvdb)) == [(1, 1), (2, 2), (1, 8)]          # by air date, else unchanged
+    assert remap_numbers(odd, []) is odd
 
 
 def test_daily_and_rss(arr) -> None:
     http = arr["http"]
     daily = items(newznab(http, t="tvsearch", q="Telenotícies", season="2026", ep="11/02"))
     assert [d["title"] for d in daily] == ["Telenoticies.2026.11.02.Telenoticies.migdia.CATALAN.1080p.WEB-DL.AAC.H264-3CAT"]
-    assert len(items(newznab(http, t="tvsearch", cat="5030,5040"))) == 2    # RSS never empty
-    assert len(items(newznab(http, t="movie", cat="2000"))) == 1
+    assert len(items(newznab(http, t="tvsearch", cat="5030,5040"))) == 3    # RSS never empty
+    assert len(items(newznab(http, t="movie", cat="2000"))) == 2
+
+
+def test_rss_learns_sonarr_titles_in_the_background(arr) -> None:
+    """New episodes of "Gènesi" reach Sonarr as "Genesis (2026)" once it is identified."""
+    http = arr["http"]
+    first = {f["title"].split(".CATALAN")[0]: f for f in items(newznab(http, t="tvsearch", cat="5030,5040"))}
+    assert "Genesi.S01E01" in first and "tvdbid" not in first["Genesi.S01E01"]   # the feed never waits
+    for _ in range(100):
+        feed = {f["title"].split(".CATALAN")[0]: f for f in items(newznab(http, t="tvsearch", cat="5030,5040"))}
+        if "Genesis.2026.S01E01" in feed:
+            break
+        time.sleep(0.05)
+    assert feed["Genesis.2026.S01E01"]["tvdbid"] == "480821"
+    assert "Merli.S01E01.Els.peripatetics" in feed                      # not found on TVmaze: 3cat title
 
 
 def test_movie_search(arr) -> None:
     http = arr["http"]
     found = items(newznab(http, t="search", q="Monster House 2006", cat="2000,2040"))
     assert [f["title"] for f in found] == ["Monster.House.2006.CATALAN.1080p.WEB-DL.AAC.H264-3CAT"]
-    assert found[0]["category"] == "2040"
+    assert found[0]["category"] == "2040" and "tmdbid" not in found[0]
     assert items(newznab(http, t="search", q="Monster 2006", cat="2000")) == []
+
+
+def test_movie_search_by_id_and_tmdb_title(arr) -> None:
+    """Radarr calls it "13 Minutes" (TMDB), 3cat "13 minuts per matar Hitler"."""
+    http = arr["http"]
+    want = [("13.Minutes.2015.CATALAN.1080p.WEB-DL.AAC.H264-3CAT", "319337", "1708135")]
+    for params in ({"tmdbid": "319337"}, {"imdbid": "1708135"}, {"tmdbid": "319337", "imdbid": "1708135"}):
+        found = items(newznab(http, t="movie", cat="2000,2040", **params))
+        assert [(f["title"], f["tmdbid"], f["imdb"]) for f in found] == want, params
+    by_title = items(newznab(http, t="search", q="13 Minutes 2015", cat="2000,2040"))
+    assert [(f["title"], f["tmdbid"], f["imdb"]) for f in by_title] == want
+    assert items(newznab(http, t="search", q="13 Minutes 1999", cat="2000")) == []   # wrong year
+    assert items(newznab(http, t="movie", tmdbid="1", cat="2000")) == []             # unknown film
 
 
 def test_nzb_endpoint(arr) -> None:

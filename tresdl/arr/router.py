@@ -45,6 +45,14 @@ def _int(value: Optional[str], default: int = 0) -> int:
 def create_arr_router(client: Any, manager: Any, settings_getter: Callable[[], Any],
                       *, data_dir: Any = None, lookup: Any = None) -> APIRouter:
     router = APIRouter(include_in_schema=False)
+    if lookup is None:
+        from pathlib import Path
+
+        from .lookup import SeriesLookup
+        if data_dir is None:
+            from ..config import app_data_dir
+            data_dir = app_data_dir()
+        lookup = SeriesLookup(cache_dir=Path(data_dir))
     indexer = Indexer(client, lookup)
     router.indexer = indexer  # type: ignore[attr-defined]  # for tests
     sab = SabnzbdService(client, manager, settings_getter, data_dir=data_dir)
@@ -67,6 +75,10 @@ def create_arr_router(client: Any, manager: Any, settings_getter: Callable[[], A
         wants_movies = (t == "movie") or (bool(cats) and all(2000 <= c < 3000 for c in cats))
         q = (params.get("q") or "").strip()
         tvdb_id, tvmaze_id = _int(params.get("tvdbid")) or None, _int(params.get("tvmazeid")) or None
+        tmdb_id = _int(params.get("tmdbid")) or None
+        imdb_id = (params.get("imdbid") or "").strip().lower().removeprefix("tt") or None
+        if imdb_id and not imdb_id.isdigit():
+            imdb_id = None
         offset, limit = _int(params.get("offset")), _int(params.get("limit"), 100) or 100
         try:
             if t not in ("search", "tvsearch", "movie"):
@@ -74,6 +86,8 @@ def create_arr_router(client: Any, manager: Any, settings_getter: Callable[[], A
             if t == "tvsearch" and (tvdb_id or tvmaze_id):
                 found = await run_in_threadpool(indexer.tv_search, q, params.get("season"), params.get("ep"),
                                                 tvdb_id, tvmaze_id)
+            elif t in ("movie", "search") and (tmdb_id or imdb_id):
+                found = await run_in_threadpool(indexer.movie_search, q, tmdb_id, imdb_id)
             elif not q:
                 found = await run_in_threadpool(indexer.rss, wants_movies)
             elif wants_movies:
@@ -83,8 +97,10 @@ def create_arr_router(client: Any, manager: Any, settings_getter: Callable[[], A
         except Exception as exc:
             log.warning("Newznab search failed (%s): %s", q, exc)
             return _xml(rl.error_xml(900, f"Error de 3cat: {exc}"))
-        log.info("Newznab t=%s q=%r tvdbid=%s tvmazeid=%s season=%s ep=%s -> %d resultats",
-                 t, q, tvdb_id, tvmaze_id, params.get("season"), params.get("ep"), len(found))
+        ids = " ".join(f"{k}={v}" for k, v in (("tvdbid", tvdb_id), ("tvmazeid", tvmaze_id),
+                                                ("tmdbid", tmdb_id), ("imdbid", imdb_id)) if v)
+        log.info("Newznab t=%s q=%r %sseason=%s ep=%s -> %d resultats", t, q, ids + " " if ids else "",
+                 params.get("season"), params.get("ep"), len(found))
         page = found[offset:offset + limit]
         return _xml(rl.rss_feed(page, base_url=str(request.base_url), api_key=api_key(),
                                 offset=offset, total=len(found)))

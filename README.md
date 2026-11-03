@@ -19,6 +19,7 @@ a casa (Docker, Raspberry Pi, Proxmox) al costat de Jellyfin, Sonarr i Radarr.
 |---|---|---|
 | Windows | Instal·lador `3CatDownloader-x.y.z-setup.exe` o zip portable de [Releases](../../releases) | [docs/windows.md](docs/windows.md) |
 | Docker (qualsevol servidor) | `ghcr.io/uriracer/3cat-downloader` per a amd64 i arm64 | [docs/docker.md](docs/docker.md) |
+| Docker Swarm | `docker stack deploy` amb una sola rèplica | [docs/swarm.md](docs/swarm.md) |
 | Raspberry Pi 4/5 | Docker o instal·lació nativa (Raspberry Pi OS de 64 bits) | [docs/raspberry-pi.md](docs/raspberry-pi.md) |
 | Proxmox (mini-PC) | Contenidor LXC amb Docker i tot l'stack multimèdia | [docs/proxmox.md](docs/proxmox.md) |
 | Linux natiu | `install.sh` crea un servei de systemd | [docs/linux.md](docs/linux.md) |

@@ -39,6 +39,9 @@ Docker baixa sola la imatge `arm64`. Pots fer servir també l'stack complet de
 [deploy/arr-stack](../deploy/arr-stack/README.md). Una Raspberry Pi 5 ho aguanta bé, però la
 transcodificació de Jellyfin va justa: millor reproduir sense transcodificar.
 
+Si la Raspberry fa servir Docker Swarm (`docker service ls` mostra serveis), segueix
+[docs/swarm.md](swarm.md).
+
 ## Opció B: instal·lació nativa (sense Docker)
 
 ```bash

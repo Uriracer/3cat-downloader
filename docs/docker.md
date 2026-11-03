@@ -15,7 +15,7 @@ curl -fsSL https://raw.githubusercontent.com/Uriracer/3cat-downloader/main/deplo
 ```
 
 Instal·la Docker si cal, et pregunta la carpeta dels vídeos i el port, i arrenca el
-contenidor. Opcions: `--media DIR`, `--port PORT`, `--password TEXT`, `--tag 0.3.0`, `--yes`
+contenidor. Opcions: `--media DIR`, `--port PORT`, `--password TEXT`, `--tag 0.4.0`, `--yes`
 (sense preguntes) i `--uninstall`. Van després de `bash -s --`.
 
 ## Docker Compose
@@ -75,6 +75,13 @@ docker compose pull && docker compose up -d
 ```
 
 Les descàrregues que estaven a mitges es reprenen soles.
+
+Quan es publica una versió nova, la imatge triga uns minuts a aparèixer. Si `pull` diu que
+no la troba, espera una mica.
+
+## Docker Swarm
+
+Si fas servir `docker stack` i `docker service`, segueix [docs/swarm.md](swarm.md).
 
 ## Construir la imatge tu mateix
 

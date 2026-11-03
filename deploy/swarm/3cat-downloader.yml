@@ -1,0 +1,40 @@
+# 3Cat Downloader — pila per a Docker Swarm (docker stack deploy).
+#
+#   sudo mkdir -p /srv/3cat-downloader/config /srv/media/3cat
+#   sudo chown -R "$(id -u):$(id -g)" /srv/3cat-downloader /srv/media/3cat
+#   PUID=$(id -u) PGID=$(id -g) docker stack deploy -c 3cat-downloader.yml mediaserver
+#
+# Swarm només admet camins absoluts als volums i ignora «container_name» i
+# «restart»: fa servir «deploy.restart_policy». Guia: docs/swarm.md.
+services:
+  3cat-downloader:
+    image: ghcr.io/uriracer/3cat-downloader:${TRESDL_TAG:-latest}
+    environment:
+      PUID: "${PUID:-1000}"
+      PGID: "${PGID:-1000}"
+      TZ: ${TZ:-Europe/Madrid}
+      # Contrasenya fixa (si no, la crees des del navegador el primer cop):
+      # TRESDL_PASSWORD: "canvia-aquesta-contrasenya"
+    volumes:
+      - ${TRESDL_CONFIG:-/srv/3cat-downloader/config}:/config     # configuració, cua i registres
+      - ${TRESDL_MEDIA:-/srv/media/3cat}:/downloads              # on es desen els vídeos
+    ports:
+      - target: 8765
+        published: ${TRESDL_PORT:-8765}
+        protocol: tcp
+        mode: host            # una sola rèplica: l'adreça del node, sense passar per la xarxa ingress
+    stop_grace_period: 30s
+    deploy:
+      replicas: 1             # la cua i la configuració són fitxers locals: no en posis més d'una
+      restart_policy:
+        condition: any
+        delay: 10s
+      update_config:
+        order: stop-first     # les dues versions no poden escriure la mateixa configuració alhora
+        failure_action: rollback
+        monitor: 60s
+      rollback_config:
+        order: stop-first
+      placement:
+        constraints:
+          - node.role == manager   # canvia-ho pel node que té el disc dels vídeos

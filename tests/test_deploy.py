@@ -90,6 +90,17 @@ def test_dockerfile_contract() -> None:
             assert item.rstrip("/") not in ignored, item
 
 
+def test_swarm_stack() -> None:
+    yaml = pytest.importorskip("yaml")
+    svc = yaml.safe_load((ROOT / "deploy/swarm/3cat-downloader.yml").read_text(encoding="utf-8"))["services"]["3cat-downloader"]
+    assert "container_name" not in svc and "restart" not in svc        # ignored by Swarm
+    assert svc["deploy"]["replicas"] == 1 and svc["deploy"]["update_config"]["order"] == "stop-first"
+    assert svc["ports"][0]["target"] == 8765
+    for volume in svc["volumes"]:                                    # Swarm needs absolute paths
+        host = volume.rsplit(":", 1)[0]
+        assert host.startswith("/") or ":-/" in host, volume
+
+
 def test_compose_files_parse() -> None:
     yaml = pytest.importorskip("yaml")
     for rel in ("deploy/docker-compose.yml", "deploy/arr-stack/docker-compose.yml"):

@@ -83,22 +83,48 @@ Quan Sonarr o Radarr els han importat, demanen esborrar-los i 3Cat Downloader el
   n'hi ha cap, busca a TheTVDB les sèries amb aquest títol exacte, any inclòs, i en mira el
   nom original. Per exemple, *Dirty Linen* és *Plats bruts*. Així no es baixa mai un
   programa equivocat.
-- Les dues maneres necessiten que el servidor pugui accedir a `api.tvmaze.com` i
-  `skyhook.sonarr.tv`. Si tot i així no la troba, descarrega-la des de la pàgina de
-  3Cat Downloader.
-- Cada cerca de Sonarr queda als registres de 3Cat Downloader, amb el nombre de resultats:
-  `Newznab t=tvsearch q='Dirty Linen' … -> 14 resultats`.
-- Les temporades i els números de capítol són els de 3cat. Normalment coincideixen amb
-  TheTVDB; si no, fes servir la cerca interactiva.
+- **Numeració**: quan la sèrie s'ha trobat a TheTVDB, els capítols es numeren com hi surten.
+  Si 3cat ho té en una sola temporada i TheTVDB en diverses (o al revés), però el nombre de
+  capítols és el mateix, es fan correspondre per ordre. Si no, cada capítol que no existeix a
+  TheTVDB pren el número del capítol de TheTVDB emès el mateix dia.
+- **Capítols nous**: la llista de novetats que Sonarr consulta cada pocs minuts fa servir el
+  títol de TheTVDB i n'inclou l'identificador quan el programa ja s'ha identificat. Els
+  programes nous s'identifiquen en segon pla: la primera vegada que surten encara porten el
+  nom de 3cat, i a la sincronització següent ja porten el de TheTVDB. Informatius, magazins i
+  esports no solen ser a TheTVDB i es queden amb el nom de 3cat.
 - En una cerca de temporada surt també un **paquet de temporada** amb tots els capítols.
 - Els programes diaris (informatius, magazins) es reconeixen per la data.
-- Radarr busca pel títol i l'any. Les pel·lícules s'agafen del catàleg de pel·lícules de 3cat.
+
+## Com troba les pel·lícules
+
+- Radarr busca primer per l'**identificador de TMDB** (o d'IMDb). 3Cat Downloader en demana
+  el títol original i les traduccions al català i al castellà al servei de metadades de
+  Radarr, i busca al catàleg de pel·lícules de 3cat la que té un d'aquests títols. Així
+  *13 Minutes* a Radarr és *13 minuts per matar Hitler* a 3cat.
+- Quan Radarr busca pel títol i l'any, primer es busca una pel·lícula de 3cat amb aquest
+  títol exacte. Si no n'hi ha cap, es busca a TMDB la pel·lícula amb aquest títol i any, i
+  després se'n fan servir les traduccions.
+- Els resultats porten el títol i l'any de Radarr i els identificadors de TMDB i IMDb.
+
+## Serveis externs i registres
+
+- Les cerques per identificador i per títol de TheTVDB/TMDB necessiten que el servidor pugui
+  accedir a `api.tvmaze.com`, `skyhook.sonarr.tv` i `api.radarr.video`. Si no hi arriba,
+  només funcionen els títols idèntics als de 3cat.
+- El que es troba es desa a `arr_metadata.json`, a la carpeta de configuració. Així, després
+  d'un reinici no cal tornar a consultar res, i una caiguda d'aquests serveis no afecta el
+  que ja es coneix. Pots esborrar el fitxer sense por: es torna a crear.
+- Cada cerca de Sonarr i Radarr queda als registres de 3Cat Downloader, amb el nombre de
+  resultats: `Newznab t=tvsearch q='Dirty Linen' … -> 14 resultats`.
+- Si una sèrie o pel·lícula no es troba, sempre la pots descarregar des de la pàgina de
+  3Cat Downloader.
 
 ## Problemes habituals
 
 | Missatge | Solució |
 |---|---|
-| Una sèrie de 3cat no surt a la cerca | Mira els registres de 3Cat Downloader. Si no hi apareix cap línia `Newznab`, Sonarr no arriba a l'indexador. Si diu `No s'ha pogut consultar TVmaze`, el servidor no té accés a internet o al DNS. Si acabes d'actualitzar, reinicia Sonarr perquè torni a llegir què admet l'indexador. |
+| Una sèrie o pel·lícula de 3cat no surt a la cerca | Mira els registres de 3Cat Downloader. Si no hi apareix cap línia `Newznab`, Sonarr o Radarr no arriben a l'indexador. Si diu `No s'ha pogut consultar …`, el servidor no té accés a internet o al DNS. Si acabes d'actualitzar, reinicia Sonarr i Radarr perquè tornin a llegir què admet l'indexador. |
+| Sonarr baixa un capítol amb un número equivocat | La numeració de 3cat i la de TheTVDB no es corresponen i no s'han pogut fer coincidir. Fes servir la cerca interactiva i tria'l a mà. |
 | *Unable to connect* | Comprova que 3Cat Downloader està en mode servidor i que el host i el port són correctes. |
 | *API Key Incorrect* | Copia de nou la clau d'API des de Configuració. |
 | La importació no troba els fitxers | Sonarr no veu la carpeta al mateix camí. Fes servir la mateixa carpeta `/data` als dos contenidors, o configura un **Remote Path Mapping** a Sonarr. |

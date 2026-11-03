@@ -35,6 +35,22 @@ Every endpoint requires the API key (`apikey` query parameter, as Sonarr/Radarr 
   programme equals `q`, SkyHook's `search/en/?term=q` gives TheTVDB series whose title
   **equals** `q` (year included), then the id path above. "Dirty Linen" -> 84710 -> TVmaze
   "Plats Bruts" -> 3cat `plats-bruts`.
+* Numbering (`indexer.remap_numbers`): with a TheTVDB episode list (SkyHook), 3cat
+  numbers are kept if all exist on TheTVDB; else matched in order when both sides have the
+  same number of regular episodes; else an episode missing on TheTVDB takes the numbers of
+  the only TheTVDB episode aired the same day.
+* RSS: `programme_series_cached` maps a 3cat programme name to TheTVDB (TVmaze search: same
+  name and Catalan language / Catalan network / 3cat official site). Unknown names are
+  resolved by a background thread; the feed never waits. Identified episodes get Sonarr's
+  title, TheTVDB numbering and `tvdbid`.
+* Films: `t=movie&tmdbid=…|imdbid=…` (digits, no `tt`, as Radarr sends it) -> Radarr's
+  metadata API (`api.radarr.video/v1/movie/{tmdb}` or `/movie/imdb/tt…`): original title +
+  `ca`/`es` translations and alternative titles must equal a 3cat film. Title fallback:
+  `/v1/search?q=&year=` with the exact title and year. Releases carry `tmdbid` and `imdb`
+  (digits), which Radarr's `ParsingService.FindMovie` matches first.
+* Cache: `arr_metadata.json` in the data directory (`[expires, value]` per key, wall clock);
+  failures only in memory for 15 min. TVmaze calls are spaced 0.55 s (20 per 10 s limit) and
+  429 answers are retried after `Retry-After`.
 * Every search is logged at INFO: `Newznab t=… q=… tvdbid=… -> N resultats`.
 * `t=tvsearch&q=…[&season=…][&ep=…]`: the programme whose title **equals** `q`
   (accent/punctuation-insensitive, trailing year ignored) — never a fuzzy match, because the
