@@ -51,6 +51,11 @@ Every endpoint requires the API key (`apikey` query parameter, as Sonarr/Radarr 
 * Cache: `arr_metadata.json` in the data directory (`[expires, value]` per key, wall clock);
   failures only in memory for 15 min. TVmaze calls are spaced 0.55 s (20 per 10 s limit) and
   429 answers are retried after `Retry-After`.
+* Manual correspondences (`mappings.py`, `arr_mappings.json`): 3cat programme/film name ->
+  TheTVDB/TMDB id, edited from the settings page (`/api/arr/mappings`, `/api/arr/lookup`,
+  session-protected like the rest of `/api`). Their names are tried before the automatic ones;
+  a mapped series that TVmaze doesn't know is still described by SkyHook.
+* End-to-end test with real Sonarr/Radarr: `tests/e2e/` and `.github/workflows/e2e.yml`.
 * Every search is logged at INFO: `Newznab t=… q=… tvdbid=… -> N resultats`.
 * `t=tvsearch&q=…[&season=…][&ep=…]`: the programme whose title **equals** `q`
   (accent/punctuation-insensitive, trailing year ignored) — never a fuzzy match, because the

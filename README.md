@@ -8,7 +8,8 @@ a casa (Docker, Raspberry Pi, Proxmox) al costat de Jellyfin, Sonarr i Radarr.
 - Tria la sèrie sencera, unes temporades o capítols solts.
 - Cua de descàrregues en directe, amb cancel·lació, reintents i represa després d'un reinici.
 - Millor qualitat disponible (fins a 1080p), subtítols en català i audiodescripció opcional.
-- Fitxers a punt per a Jellyfin i Sonarr: `Sèrie/Season 01/Sèrie - S01E01 - Títol.mp4`.
+- Fitxers a punt per a Jellyfin i Sonarr: `Sèrie/Season 01/Sèrie - S01E01 - Títol.mp4`, amb
+  la descripció i les imatges de 3cat per a Jellyfin (fitxers `.nfo`).
 - Mode servidor amb contrasenya i clau d'API, accessible des del mòbil o l'ordinador de casa.
 - **Integració amb Sonarr i Radarr**: funciona com un indexador i un client de descàrrega
   més, i els capítols nous es baixen sols ([guia](docs/sonarr-radarr.md)).

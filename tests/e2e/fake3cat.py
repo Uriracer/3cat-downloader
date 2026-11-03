@@ -24,7 +24,9 @@ from functools import partial
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+_parents = Path(__file__).resolve().parents
+if len(_parents) > 2 and (_parents[2] / "tresdl").is_dir():   # from a checkout; the image has it installed
+    sys.path.insert(0, str(_parents[2]))
 
 from tresdl import api, cli  # noqa: E402
 from tresdl.arr.releases import normalize  # noqa: E402

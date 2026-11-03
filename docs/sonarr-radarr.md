@@ -95,6 +95,24 @@ Quan Sonarr o Radarr els han importat, demanen esborrar-los i 3Cat Downloader el
 - En una cerca de temporada surt també un **paquet de temporada** amb tots els capítols.
 - Els programes diaris (informatius, magazins) es reconeixen per la data.
 
+## Quan no la troba sola: correspondències manuals
+
+Algunes sèries no es poden trobar soles, perquè ni TVmaze ni TheTVDB en coneixen el nom
+català. Passa sobretot amb les sèries estrangeres doblades: *El xai Shaun* és *Shaun the
+Sheep*. En aquests casos, digues tu quina sèrie és:
+
+1. A 3Cat Downloader, ves a **Configuració → Correspondències amb TheTVDB i TMDB**.
+2. Tria **Sèrie** i escriu el nom tal com surt a 3cat: `El xai Shaun`.
+3. Escriu el nom a TheTVDB (en anglès, el que surt a Sonarr) o el seu identificador i prem
+   **Cerca**. Al costat del resultat correcte, prem **Tria**.
+
+A partir d'aquí, les cerques de Sonarr i la llista de capítols nous fan servir aquesta
+correspondència. Les pel·lícules funcionen igual, amb el nom o l'identificador de TMDB (el
+que surt a Radarr). Si el nom no coincideix exactament amb el de 3cat, la pàgina et
+suggereix el correcte.
+
+Les correspondències es desen a `arr_mappings.json`, a la carpeta de configuració.
+
 ## Com troba les pel·lícules
 
 - Radarr busca primer per l'**identificador de TMDB** (o d'IMDb). 3Cat Downloader en demana
@@ -124,6 +142,7 @@ Quan Sonarr o Radarr els han importat, demanen esborrar-los i 3Cat Downloader el
 | Missatge | Solució |
 |---|---|
 | Una sèrie o pel·lícula de 3cat no surt a la cerca | Mira els registres de 3Cat Downloader. Si no hi apareix cap línia `Newznab`, Sonarr o Radarr no arriben a l'indexador. Si diu `No s'ha pogut consultar …`, el servidor no té accés a internet o al DNS. Si acabes d'actualitzar, reinicia Sonarr i Radarr perquè tornin a llegir què admet l'indexador. |
+| Una sèrie doblada (o amb un nom molt diferent) no surt mai | Afegeix-ne la correspondència a mà: vegeu [Quan no la troba sola](#quan-no-la-troba-sola-correspondències-manuals). |
 | Sonarr baixa un capítol amb un número equivocat | La numeració de 3cat i la de TheTVDB no es corresponen i no s'han pogut fer coincidir. Fes servir la cerca interactiva i tria'l a mà. |
 | *Unable to connect* | Comprova que 3Cat Downloader està en mode servidor i que el host i el port són correctes. |
 | *API Key Incorrect* | Copia de nou la clau d'API des de Configuració. |

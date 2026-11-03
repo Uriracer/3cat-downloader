@@ -52,6 +52,8 @@ A Windows, l'executable `3CatDownloader.exe` accepta les mateixes opcions.
 | Descàrregues simultànies | de 1 a 8 |
 | Qualitat per defecte | millor disponible, 1080p, 720p, 576p, 480p o MP4 directe |
 | Ometre existents | no torna a baixar un capítol si el fitxer ja hi és |
+| Informació per a Jellyfin | desa un fitxer `.nfo` i la imatge de cada capítol al costat del vídeo, i `tvshow.nfo` i `poster.jpg` a la carpeta de la sèrie. Així Jellyfin mostra el títol, la descripció i la data de 3cat dels programes que no són a TheTVDB (informatius, magazins, esports). No sobreescriu cap fitxer que ja existeixi. Les descàrregues de Sonarr i Radarr no en porten, perquè ja en fan els seus |
+| Correspondències amb TheTVDB i TMDB | per a Sonarr i Radarr: vegeu [sonarr-radarr.md](sonarr-radarr.md#quan-no-la-troba-sola-correspondències-manuals) |
 | Subtítols, incrustar-los, audiodescripció | |
 
 ## Proxy invers

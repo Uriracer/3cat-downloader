@@ -65,6 +65,13 @@ jobs:
         run: $COMPOSE up -d --quiet-pull
       - name: Search, download and import
         run: python3 tests/e2e/run_e2e.py
+      - name: Report the 3Cat Downloader log
+        if: failure()
+        run: |
+          tail_log="$($COMPOSE logs --no-color tresdl | tail -n 60)"
+          tail_log="${tail_log//'%'/'%25'}"
+          tail_log="${tail_log//$'\n'/'%0A'}"
+          echo "::error title=Registre de 3Cat Downloader::${tail_log}"
       - name: Logs
         if: always()
         run: |
