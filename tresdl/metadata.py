@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import logging
 import os
+import threading
 import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import Any, Callable, Optional
@@ -30,6 +31,9 @@ log = logging.getLogger(__name__)
 SERIES_NFO = "tvshow.nfo"
 SERIES_POSTER = "poster.jpg"
 MAX_IMAGE_BYTES = 10 * 1024 * 1024
+
+# Two episodes of a series can finish at once and both write tvshow.nfo/poster.jpg.
+_write_lock = threading.Lock()
 
 FetchImage = Callable[[str], bytes]
 
@@ -91,15 +95,16 @@ def series_nfo(title: str, description: str = "", program_id: Optional[int] = No
 
 def _write_new(path: Path, data: bytes) -> bool:
     """Write ``path`` only if it does not exist yet (atomic)."""
-    if path.exists():
-        return False
-    tmp = path.with_name(f".{path.name}.tmp")
-    try:
-        tmp.write_bytes(data)
-        os.replace(tmp, path)
-    except OSError:
-        tmp.unlink(missing_ok=True)
-        raise
+    with _write_lock:
+        if path.exists():
+            return False
+        tmp = path.with_name(f".{path.name}.tmp")
+        try:
+            tmp.write_bytes(data)
+            os.replace(tmp, path)
+        except OSError:
+            tmp.unlink(missing_ok=True)
+            raise
     return True
 
 
