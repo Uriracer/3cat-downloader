@@ -1,0 +1,82 @@
+name: E2E (Sonarr i Radarr)
+
+# Real Sonarr and Radarr search, grab and import from 3Cat Downloader (with a
+# fake 3cat catalogue: the real one is geo-restricted). See tests/e2e/.
+on:
+  push:
+    paths:
+      - "tresdl/**"
+      - "tests/e2e/**"
+      - "Dockerfile"
+      - "docker/**"
+      - "requirements.txt"
+      - ".github/workflows/e2e.yml"
+  pull_request:
+    paths:
+      - "tresdl/**"
+      - "tests/e2e/**"
+      - "Dockerfile"
+      - ".github/workflows/e2e.yml"
+  schedule:
+    - cron: "23 5 * * 1"   # weekly: new Sonarr/Radarr versions, metadata services
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  e2e:
+    name: Sonarr i Radarr reals
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      COMPOSE: docker compose -f tests/e2e/docker-compose.yml
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build the image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          tags: 3cat-downloader:e2e
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Prepare folders and API keys
+        run: |
+          root="$RUNNER_TEMP/e2e"
+          mkdir -p "$root/tresdl" "$root/sonarr" "$root/radarr" \
+                   "$root/data/downloads/3cat" "$root/data/media/tv" "$root/data/media/movies"
+          for app in sonarr radarr; do
+            key="e2e00000000000000000000000${app}"
+            printf '<Config>\n  <ApiKey>%s</ApiKey>\n  <AuthenticationMethod>External</AuthenticationMethod>\n  <AuthenticationRequired>DisabledForLocalAddresses</AuthenticationRequired>\n  <AnalyticsEnabled>False</AnalyticsEnabled>\n  <LogLevel>debug</LogLevel>\n</Config>\n' \
+              "$key" > "$root/$app/config.xml"
+          done
+          {
+            echo "E2E_ROOT=$root"
+            echo "E2E_UID=$(id -u)"
+            echo "E2E_GID=$(id -g)"
+          } >> "$GITHUB_ENV"
+      - name: Start 3Cat Downloader, Sonarr and Radarr
+        run: $COMPOSE up -d --quiet-pull
+      - name: Search, download and import
+        run: python3 tests/e2e/run_e2e.py
+      - name: Logs
+        if: always()
+        run: |
+          $COMPOSE ps
+          for service in tresdl sonarr radarr; do
+            echo "::group::$service"
+            $COMPOSE logs --no-color "$service" | tail -n 300
+            echo "::endgroup::"
+          done
+          echo "::group::Files"
+          find "$E2E_ROOT/data" -type f | sort
+          echo "::endgroup::"
+      - name: Stop
+        if: always()
+        run: $COMPOSE down

@@ -4,7 +4,8 @@ Matching is deliberately strict: a programme is only returned when its title
 equals the searched title (accent/punctuation-insensitive), or one of the
 names the metadata services give for the searched id/title (``lookup.py``).
 Releases are named with the title Sonarr/Radarr use, so a loose match would
-make them grab another programme's episodes under the wrong name.
+make them grab another programme's episodes under the wrong name. The user's
+manual correspondences (``mappings.py``) come before the automatic names.
 """
 from __future__ import annotations
 
@@ -20,6 +21,7 @@ from typing import Any, Optional, Protocol
 from ..models import Episode
 from . import releases as rl
 from .lookup import MovieNames, SeriesLookup, SeriesNames
+from .mappings import MappingStore
 from .releases import Release, Token
 
 log = logging.getLogger(__name__)
@@ -106,15 +108,21 @@ def _permalink(ep: Episode) -> str:
 
 
 class Indexer:
-    def __init__(self, client: IndexClient, lookup: Optional[SeriesLookup] = None) -> None:
+    def __init__(self, client: IndexClient, lookup: Optional[SeriesLookup] = None,
+                 mappings: Optional[MappingStore] = None) -> None:
         self._client = client
         self._lookup = lookup or SeriesLookup()
+        self._mappings = mappings or MappingStore()
         self._lock = threading.Lock()
         self._heights: dict[int, tuple[float, Optional[int]]] = {}
 
     @property
     def lookup(self) -> SeriesLookup:
         return self._lookup
+
+    @property
+    def mappings(self) -> MappingStore:
+        return self._mappings
 
     # ------------------------------------------------------------ helpers
     def _height(self, ep: Episode) -> Optional[int]:
@@ -138,7 +146,7 @@ class Indexer:
             self._heights[key] = (time.monotonic(), height)
         return height
 
-    def _programmes(self, query: str) -> list[Any]:
+    def programmes(self, query: str) -> list[Any]:
         wanted = normalize(query)
         if not wanted:
             return []
@@ -199,12 +207,15 @@ class Indexer:
                           tvmaze_id: Optional[int]) -> tuple[list[Any], Optional[SeriesNames]]:
         """3cat programmes of a TheTVDB/TVmaze series, and what we know about it."""
         info = self._lookup.find(tvdb_id=tvdb_id, tvmaze_id=tvmaze_id)
+        manual = self._mappings.titles("series", (info.tvdb_id if info else None) or tvdb_id)
         if info is None:
-            return [], None
+            if not manual:
+                return [], None
+            info = SeriesNames(tvdb_id=tvdb_id)     # metadata services offline: the mapping is enough
         if tvdb_id and not info.tvdb_id:
             info.tvdb_id = tvdb_id
-        for name in info.names:
-            found = self._programmes(name)
+        for name in manual + info.names:
+            found = self.programmes(name)
             if found:
                 return found, info
         log.info("La sèrie %s (TheTVDB %s) no és a 3cat", info.names, info.tvdb_id)
@@ -243,7 +254,7 @@ class Indexer:
             if programmes:
                 title = (info.sonarr_title if info else "") or query.strip() or programmes[0].title
         if not programmes and title:
-            programmes = self._programmes(title) or self._programmes(query)
+            programmes = self.programmes(title) or self.programmes(query)
             info = None
         if not programmes and title:
             programmes, info, tvdb_title = self._programmes_by_tvdb_title(query)
@@ -282,12 +293,17 @@ class Indexer:
         return results[:MAX_RESULTS]
 
     # ------------------------------------------------------------ films
-    def _films_named(self, names: list[str]) -> list[Episode]:
+    def films_named(self, names: list[str]) -> list[Episode]:
         wanted = {normalize(n) for n in names} - {""}
         if not wanted:
             return []
         return [f for f in self._client.films()
                 if normalize(f.program_title) in wanted or normalize(f.title) in wanted]
+
+    def _films_of(self, info: Optional[MovieNames], tmdb_id: Optional[int]) -> list[Episode]:
+        """3cat films of a TMDB film: the user's correspondences, then its titles."""
+        manual = self._mappings.titles("movie", (info.tmdb_id if info else None) or tmdb_id)
+        return self.films_named(manual + (info.names if info else []))
 
     def movie_search(self, query: str, tmdb_id: Optional[int] = None,
                      imdb_id: Optional[str] = None) -> list[Release]:
@@ -302,21 +318,23 @@ class Indexer:
         films: list[Episode] = []
         if tmdb_id or imdb_id:
             info = self._lookup.movie(tmdb_id=tmdb_id, imdb_id=imdb_id)
-            films = self._films_named(info.names) if info else []
+            films = self._films_of(info, tmdb_id)
         if not films and title:
-            films = self._films_named([title])
+            films = self.films_named([title])
         if not films and title:
             wanted = normalize(title)
             for hit in self._lookup.movie_search(title, year)[:5]:
                 if normalize(hit.title) != wanted or (year and hit.year and hit.year != year):
                     continue
                 info = self._lookup.movie(tmdb_id=hit.tmdb_id)
-                films = self._films_named(info.names) if info else []
+                films = self._films_of(info, hit.tmdb_id)
                 if films:
                     log.info("«%s» és «%s» a 3cat (TMDB %s)", query, films[0].title, hit.tmdb_id)
                     break
         if not films:
             return []
+        if info is None and tmdb_id:
+            info = MovieNames(tmdb_id=tmdb_id)
         if info and info.title:
             title, year = info.title, info.year or year
         return [self._movie_release(film, title, year, info, self._height(film)) for film in films]
@@ -332,13 +350,23 @@ class Indexer:
         results: list[Release] = []
         if movies:
             for film in self._client.films()[:limit]:
-                results.append(self._movie_release(film, film.program_title or film.title, None, None, 1080))
+                title, year, info = film.program_title or film.title, None, None
+                tmdb_id = (self._mappings.remote_id("movie", film.program_title or film.title)
+                           or self._mappings.remote_id("movie", film.title))
+                if tmdb_id:
+                    info = self._lookup.movie_cached(tmdb_id) or MovieNames(tmdb_id=tmdb_id)
+                    title, year = info.title or title, info.year
+                results.append(self._movie_release(film, title, year, info, 1080))
             return results
         for ep in self._client.recent_episodes(limit):
             if not ep.program_title or ep.program_id == 0:
                 continue
             series, tvdb_id = ep.program_title, None
-            info = self._lookup.programme_series_cached(ep.program_title)
+            mapped = self._mappings.remote_id("series", ep.program_title)
+            if mapped:
+                info = self._lookup.find_cached(mapped) or SeriesNames(tvdb_id=mapped)
+            else:
+                info = self._lookup.programme_series_cached(ep.program_title)
             if info and info.sonarr_title:
                 series, tvdb_id = info.sonarr_title, info.tvdb_id
                 ep = remap_numbers([ep], info.episodes)[0]

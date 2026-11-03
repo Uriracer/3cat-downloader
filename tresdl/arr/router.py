@@ -3,9 +3,12 @@
 * ``/arr/newznab/api``        Newznab indexer (``t=caps|search|tvsearch|movie``)
 * ``/arr/nzb/<token>.nzb``    pseudo-NZB of one release
 * ``/sabnzbd/api`` and ``/api``  SABnzbd download-client API (``mode=...``)
+* ``/api/arr/mappings``, ``/api/arr/lookup``  manual correspondences (web page)
 
-Every request needs the API key (``apikey`` parameter or ``X-Api-Key``
-header), in desktop and server mode alike. Errors use each protocol's format.
+Every Sonarr/Radarr request needs the API key (``apikey`` parameter or
+``X-Api-Key`` header), in desktop and server mode alike. Errors use each
+protocol's format. The ``/api/arr/*`` endpoints are for the web page and use
+its login, like the rest of ``/api``.
 """
 from __future__ import annotations
 
@@ -13,12 +16,13 @@ import hmac
 import logging
 from typing import Any, Callable, Optional
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import JSONResponse, Response
 
 from . import releases as rl
 from .indexer import Indexer
+from .mappings import KINDS, Mapping, MappingStore
 from .sabnzbd import SAB_VERSION, SabError, SabnzbdService
 
 log = logging.getLogger(__name__)
@@ -44,16 +48,16 @@ def _int(value: Optional[str], default: int = 0) -> int:
 
 def create_arr_router(client: Any, manager: Any, settings_getter: Callable[[], Any],
                       *, data_dir: Any = None, lookup: Any = None) -> APIRouter:
-    router = APIRouter(include_in_schema=False)
-    if lookup is None:
-        from pathlib import Path
+    from pathlib import Path
 
+    router = APIRouter(include_in_schema=False)
+    if data_dir is None:
+        from ..config import app_data_dir
+        data_dir = app_data_dir()
+    if lookup is None:
         from .lookup import SeriesLookup
-        if data_dir is None:
-            from ..config import app_data_dir
-            data_dir = app_data_dir()
         lookup = SeriesLookup(cache_dir=Path(data_dir))
-    indexer = Indexer(client, lookup)
+    indexer = Indexer(client, lookup, MappingStore(Path(data_dir)))
     router.indexer = indexer  # type: ignore[attr-defined]  # for tests
     sab = SabnzbdService(client, manager, settings_getter, data_dir=data_dir)
     router.sab = sab  # type: ignore[attr-defined]  # for tests
@@ -190,4 +194,81 @@ def create_arr_router(client: Any, manager: Any, settings_getter: Callable[[], A
 
     for path in ("/sabnzbd/api", "/api"):
         router.add_api_route(path, sabnzbd, methods=["GET", "POST"])
+
+    # ------------------------------------------------- manual correspondences
+    mappings = indexer.mappings
+
+    def check_kind(kind: str) -> None:
+        if kind not in KINDS:
+            raise HTTPException(status_code=422, detail="El tipus ha de ser «series» o «movie».")
+
+    @router.get("/api/arr/mappings")
+    async def list_mappings() -> dict:
+        return {"mappings": [m.to_dict() for m in mappings.all()]}
+
+    @router.post("/api/arr/mappings")
+    async def add_mapping(body: dict) -> dict:
+        kind = str(body.get("kind") or "")
+        check_kind(kind)
+        title = str(body.get("title") or "").strip()[:200]
+        try:
+            remote_id = int(body.get("remote_id") or 0)
+        except (TypeError, ValueError):
+            remote_id = 0
+        if not title or remote_id <= 0:
+            raise HTTPException(status_code=422, detail="Cal el nom a 3cat i l'identificador.")
+        mapping = await run_in_threadpool(_checked_mapping, kind, title, remote_id)
+        mappings.add(mapping)
+        log.info("Correspondència: «%s» (3cat) = %s %s «%s»", mapping.title,
+                 "TheTVDB" if kind == "series" else "TMDB", remote_id, mapping.remote_title)
+        return mapping.to_dict()
+
+    def _checked_mapping(kind: str, title: str, remote_id: int) -> Mapping:
+        """The mapping with 3cat's exact name and Sonarr/Radarr's title; 404 if either is unknown."""
+        if kind == "series":
+            found = [p.title for p in indexer.programmes(title)]
+            if not found:
+                similar = [p.title for p in client.search(title, limit=3)]
+                hint = f" Potser és «{'», «'.join(similar)}»?" if similar else ""
+                raise HTTPException(status_code=404,
+                                    detail=f"No hi ha cap programa de 3cat que es digui «{title}».{hint}")
+            info = lookup.find(tvdb_id=remote_id)
+            remote = info.sonarr_title if info else ""
+            service = "TheTVDB"
+        else:
+            found = [f.program_title or f.title for f in indexer.films_named([title])]
+            if not found:
+                raise HTTPException(status_code=404, detail=f"No hi ha cap pel·lícula de 3cat que es digui «{title}».")
+            info = lookup.movie(tmdb_id=remote_id)
+            remote = f"{info.title} ({info.year})" if info and info.year else (info.title if info else "")
+            service = "TMDB"
+        if not remote:
+            raise HTTPException(status_code=404, detail=f"No s'ha trobat l'identificador {remote_id} a {service} "
+                                                        "(o el servei no respon).")
+        return Mapping(kind, found[0], remote_id, remote)
+
+    @router.delete("/api/arr/mappings")
+    async def delete_mapping(kind: str = Query(...), title: str = Query(..., max_length=200)) -> dict:
+        check_kind(kind)
+        if not mappings.remove(kind, title):
+            raise HTTPException(status_code=404, detail="Aquesta correspondència no existeix.")
+        return {"ok": True}
+
+    @router.get("/api/arr/lookup")
+    async def remote_lookup(kind: str = Query(...), q: str = Query("", max_length=200)) -> dict:
+        """TheTVDB series (as Sonarr finds them) or TMDB films (as Radarr finds them) called ``q``."""
+        check_kind(kind)
+        query = q.strip()
+        if not query:
+            return {"results": []}
+        if kind == "series":
+            hits = await run_in_threadpool(lookup.search, query)
+            results = [{"id": h.tvdb_id, "title": h.title, "year": (h.first_aired or "")[:4]} for h in hits]
+        else:
+            hits = await run_in_threadpool(lookup.movie_search, query)
+            results = [{"id": h.tmdb_id, "title": h.title, "year": str(h.year or "")} for h in hits]
+        wanted = rl.normalize(query)
+        results.sort(key=lambda r: rl.normalize(r["title"]) != wanted)   # exact titles first, stable otherwise
+        return {"results": results[:20]}
+
     return router

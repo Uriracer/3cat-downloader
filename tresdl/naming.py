@@ -149,6 +149,21 @@ def episode_path(root: str, ep: Episode, ext: str = "mp4", template: str | None 
     return str(final)
 
 
+def series_dir(root: str, ep: Episode, template: str | None = None) -> str | None:
+    """The series folder of ``ep`` (``<root>/<Series>``), or None when the
+    template does not start with a ``{series}`` folder."""
+    parts = _split_template(template or DEFAULT_TEMPLATE)
+    if len(parts) < 2 or parts[0].strip() != "{series}":
+        return None
+    root_path = Path(os.path.abspath(os.path.expanduser(root)))
+    return str(root_path / _render("{series}", _values(ep))[0])
+
+
+def episode_values(ep: Episode) -> dict[str, Any]:
+    """Placeholder values of ``ep`` (numbers with the fallbacks above), unsanitised."""
+    return _values(ep)
+
+
 def disambiguate(path: str, video_id: int) -> str:
     """``<stem> [<video_id>]<ext>``: a unique variant of ``path`` for one video.
 

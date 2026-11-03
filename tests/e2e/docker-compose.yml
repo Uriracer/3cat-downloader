@@ -1,0 +1,52 @@
+# End-to-end test: 3Cat Downloader (fake 3cat catalogue) + real Sonarr and Radarr.
+# Used by .github/workflows/e2e.yml; locally (Linux, Docker):
+#
+#   docker build -t 3cat-downloader:e2e .
+#   export E2E_ROOT=/tmp/e2e E2E_UID=$(id -u) E2E_GID=$(id -g)
+#   mkdir -p $E2E_ROOT/{tresdl,sonarr,radarr} $E2E_ROOT/data/{downloads/3cat,media/tv,media/movies}
+#   # API keys: see the "Prepare" step of the workflow (config.xml of Sonarr and Radarr)
+#   docker compose -f tests/e2e/docker-compose.yml up -d && python3 tests/e2e/run_e2e.py
+#
+# All three containers see the media at the same path (/data), like
+# deploy/arr-stack, so Sonarr and Radarr import what 3Cat Downloader saves.
+services:
+  tresdl:
+    image: ${TRESDL_IMAGE:-3cat-downloader:e2e}
+    entrypoint: ["/usr/bin/tini", "--", "python", "/e2e/fake3cat.py"]
+    user: "${E2E_UID:-1000}:${E2E_GID:-1000}"
+    environment:
+      HOME: /config
+      TRESDL_DATA_DIR: /config
+      TRESDL_DOWNLOAD_DIR: /data/downloads/3cat
+      TRESDL_API_KEY: e2e0000000000000000000000000tres
+      TRESDL_PASSWORD: e2e-contrasenya
+    volumes:
+      - ./fake3cat.py:/e2e/fake3cat.py:ro
+      - ${E2E_ROOT:?}/tresdl:/config
+      - ${E2E_ROOT:?}/data:/data
+    ports:
+      - "8765:8765"
+
+  sonarr:
+    image: lscr.io/linuxserver/sonarr:latest
+    environment:
+      PUID: ${E2E_UID:-1000}
+      PGID: ${E2E_GID:-1000}
+      TZ: Etc/UTC
+    volumes:
+      - ${E2E_ROOT:?}/sonarr:/config
+      - ${E2E_ROOT:?}/data:/data
+    ports:
+      - "8989:8989"
+
+  radarr:
+    image: lscr.io/linuxserver/radarr:latest
+    environment:
+      PUID: ${E2E_UID:-1000}
+      PGID: ${E2E_GID:-1000}
+      TZ: Etc/UTC
+    volumes:
+      - ${E2E_ROOT:?}/radarr:/config
+      - ${E2E_ROOT:?}/data:/data
+    ports:
+      - "7878:7878"

@@ -1242,6 +1242,7 @@ const SETTINGS_FIELDS = [
   ['set-embed-subtitles', 'embed_subtitles', 'bool'],
   ['set-audio-description', 'audio_description', 'bool'],
   ['set-skip-existing', 'skip_existing', 'bool'],
+  ['set-metadata-files', 'metadata_files', 'bool'],
 ];
 
 async function loadSettings() {
@@ -1270,6 +1271,92 @@ async function loadSettingsForm() {
   form.dataset.loaded = '1';
   loading.hidden = true;
   form.hidden = false;
+  loadMappings();
+}
+
+// ---------------------------------------------------------------------------
+// Manual correspondences (3cat name -> TheTVDB / TMDB id), see tresdl/arr/mappings.py
+// ---------------------------------------------------------------------------
+
+const MAPPING_SERVICES = { series: 'TheTVDB', movie: 'TMDB' };
+
+async function loadMappings() {
+  const form = $('#mappings-form');
+  try {
+    const data = await api('arr/mappings');
+    renderMappings(data.mappings || []);
+    form.hidden = false;
+  } catch (err) {
+    form.hidden = true;   // integration disabled (or an older server)
+    if (!(err instanceof ApiError && err.status === 404)) console.warn('Could not load mappings', err);
+  }
+}
+
+function renderMappings(mappings) {
+  setChildren($('#mappings-list'), mappings.map((m) => h('li', {},
+    h('span', { class: 'mapping-text' },
+      h('strong', { text: m.title }), ' → ', m.remote_title || '?',
+      h('span', { class: 'muted', text: ` (${MAPPING_SERVICES[m.kind]} ${m.remote_id})` })),
+    h('button', { type: 'button', class: 'btn btn-small', text: 'Esborra', onclick: () => removeMapping(m) }))));
+}
+
+function onMappingKind() {
+  const series = $('#map-kind').value === 'series';
+  $('#map-query-label').textContent = series
+    ? 'Nom a TheTVDB (en anglès) o identificador' : 'Nom a TMDB (en anglès) o identificador';
+  $('#map-query').placeholder = series ? 'Shaun the Sheep' : 'Miss You Already';
+  $('#map-title').placeholder = series ? 'El xai Shaun' : "Ja t'enyoro";
+  $('#map-results').replaceChildren();
+}
+
+async function searchMappingTarget(event) {
+  event.preventDefault();
+  const kind = $('#map-kind').value;
+  const query = $('#map-query').value.trim();
+  const results = $('#map-results');
+  if (!$('#map-title').value.trim()) { toast('Escriu el nom del programa a 3cat.', { kind: 'warning' }); return; }
+  if (!query) return;
+  if (/^\d+$/.test(query)) { await addMapping(kind, Number(query)); return; }
+  const btn = $('#map-search');
+  btn.disabled = true;
+  try {
+    const data = await api(`arr/lookup?kind=${kind}&q=${encodeURIComponent(query)}`);
+    const found = data.results || [];
+    if (!found.length) {
+      setChildren(results, h('li', { class: 'muted', text: `${MAPPING_SERVICES[kind]} no té res amb aquest nom.` }));
+      return;
+    }
+    setChildren(results, found.map((r) => h('li', {},
+      h('span', { class: 'mapping-text' }, h('strong', { text: r.title }),
+        h('span', { class: 'muted', text: ` ${r.year ? `(${r.year}) ` : ''}· ${r.id}` })),
+      h('button', { type: 'button', class: 'btn btn-small btn-primary', text: 'Tria', onclick: () => addMapping(kind, r.id) }))));
+  } catch (err) {
+    showError(err, "No s'ha pogut fer la cerca");
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function addMapping(kind, remoteId) {
+  try {
+    const saved = await api('arr/mappings', { method: 'POST', body: { kind, title: $('#map-title').value.trim(), remote_id: remoteId } });
+    toast(`«${saved.title}» és «${saved.remote_title}» per a ${kind === 'series' ? 'Sonarr' : 'Radarr'}.`, { kind: 'success' });
+    $('#map-title').value = '';
+    $('#map-query').value = '';
+    $('#map-results').replaceChildren();
+    await loadMappings();
+  } catch (err) {
+    showError(err, "No s'ha pogut desar la correspondència");
+  }
+}
+
+async function removeMapping(mapping) {
+  try {
+    await api(`arr/mappings?kind=${mapping.kind}&title=${encodeURIComponent(mapping.title)}`, { method: 'DELETE' });
+    await loadMappings();
+  } catch (err) {
+    showError(err, "No s'ha pogut esborrar la correspondència");
+  }
 }
 
 function fillSettingsForm(settings) {
@@ -1457,6 +1544,8 @@ function wireStaticUi() {
   });
   $('#set-template-reset').addEventListener('click', () => { $('#set-template').value = DEFAULT_TEMPLATE; onSettingsInput(); });
   $('#set-copy-key').addEventListener('click', copyApiKey);
+  $('#mappings-form').addEventListener('submit', searchMappingTarget);
+  $('#map-kind').addEventListener('change', onMappingKind);
 }
 
 async function checkHealth() {
