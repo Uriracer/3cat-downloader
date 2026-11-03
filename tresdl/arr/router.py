@@ -83,6 +83,8 @@ def create_arr_router(client: Any, manager: Any, settings_getter: Callable[[], A
         except Exception as exc:
             log.warning("Newznab search failed (%s): %s", q, exc)
             return _xml(rl.error_xml(900, f"Error de 3cat: {exc}"))
+        log.info("Newznab t=%s q=%r tvdbid=%s tvmazeid=%s season=%s ep=%s -> %d resultats",
+                 t, q, tvdb_id, tvmaze_id, params.get("season"), params.get("ep"), len(found))
         page = found[offset:offset + limit]
         return _xml(rl.rss_feed(page, base_url=str(request.base_url), api_key=api_key(),
                                 offset=offset, total=len(found)))

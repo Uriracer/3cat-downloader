@@ -31,6 +31,11 @@ Every endpoint requires the API key (`apikey` query parameter, as Sonarr/Radarr 
   Sonarr's title (`Genesis.2026.S01E01…`) and carry `<newznab:attr name="tvdbid">`, which
   Sonarr's `ParsingService.FindSeries` accepts when the title differs. Cached 24 h
   (failures 15 min); without TVmaze Sonarr falls back to the title search.
+* Title search fallback (Sonarr's title tier, or a Sonarr that cached old caps): when no 3cat
+  programme equals `q`, SkyHook's `search/en/?term=q` gives TheTVDB series whose title
+  **equals** `q` (year included), then the id path above. "Dirty Linen" -> 84710 -> TVmaze
+  "Plats Bruts" -> 3cat `plats-bruts`.
+* Every search is logged at INFO: `Newznab t=… q=… tvdbid=… -> N resultats`.
 * `t=tvsearch&q=…[&season=…][&ep=…]`: the programme whose title **equals** `q`
   (accent/punctuation-insensitive, trailing year ignored) — never a fuzzy match, because the
   release is named after `q`. Daily series: `season=YYYY&ep=MM/DD` matches the air date.

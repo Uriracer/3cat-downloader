@@ -120,6 +120,12 @@ TVMAZE = {   # what TVmaze / SkyHook answer, keyed by URL
     "https://api.tvmaze.com/lookup/shows?thetvdb=82712": {"id": 1, "name": "Genesis", "officialSite": ""},
     "https://api.tvmaze.com/shows/1/akas": [],
     "https://skyhook.sonarr.tv/v1/tvdb/shows/en/82712": {"title": "Genesis (2005)"},
+    "https://skyhook.sonarr.tv/v1/tvdb/search/en/?term=Genesis 2026": [
+        {"tvdbId": 393542, "title": "Genesis", "firstAired": "2021-01-19"},
+        {"tvdbId": 480821, "title": "Genesis (2026)", "firstAired": "2026-09-21"}],
+    "https://skyhook.sonarr.tv/v1/tvdb/search/en/?term=Genesis": [
+        {"tvdbId": 480821, "title": "Genesis (2026)", "firstAired": "2026-09-21"},
+        {"tvdbId": 82712, "title": "Genesis (2005)", "firstAired": "2005-01-01"}],
 }
 
 
@@ -221,7 +227,11 @@ def test_tvsearch_is_strict_and_season_has_pack(arr) -> None:
 def test_tvsearch_by_tvdbid_uses_original_title(arr) -> None:
     """Sonarr calls it "Genesis (2026)" (TheTVDB), 3cat "Gènesi": found through TVmaze."""
     http = arr["http"]
-    assert items(newznab(http, t="tvsearch", q="Genesis 2026", season="1")) == []   # title only: no match
+    # Sonarr's title search: TheTVDB "Genesis (2026)" -> TVmaze "Gènesi" -> 3cat.
+    by_title = items(newznab(http, t="tvsearch", q="Genesis 2026", season="1", ep="3"))
+    assert [(f["title"].split(".CATALAN")[0], f["tvdbid"]) for f in by_title] == [("Genesis.2026.S01E03", "480821")]
+    # A plain "Genesis" is another series: never Gènesi, although TheTVDB lists "Genesis (2026)".
+    assert items(newznab(http, t="tvsearch", q="Genesis", season="1", ep="1")) == []
     found = items(newznab(http, t="tvsearch", tvdbid="480821", season="1", cat="5030,5040"))
     assert [f["title"] for f in found] == [
         "Genesis.2026.S01.CATALAN.1080p.WEB-DL.AAC.H264-3CAT",

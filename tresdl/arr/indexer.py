@@ -153,6 +153,22 @@ class Indexer:
         log.info("La sèrie %s (TheTVDB %s) no és a 3cat", info.names, tvdb_id or info.tvdb_id)
         return [], info.sonarr_title, tvdb_id or info.tvdb_id
 
+    def _programmes_by_tvdb_title(self, query: str) -> tuple[list[Any], Optional[int], str]:
+        """Sonarr's title ("Dirty Linen") -> TheTVDB series -> their 3cat name ("Plats bruts").
+
+        Only series whose TheTVDB title equals ``query`` (year included) are
+        considered, and their original name must equal a 3cat programme: as
+        strict as the plain title search.
+        """
+        wanted = normalize(query)   # Sonarr searches TheTVDB's exact title: "Genesis (2026)" -> "Genesis 2026"
+        hits = [hit for hit in self._lookup.search(query) if normalize(hit.title) == wanted]
+        for hit in hits[:5]:
+            programmes, _title, tvdb_id = self._programmes_by_id(hit.tvdb_id, None)
+            if programmes:
+                log.info("«%s» és «%s» a 3cat (TheTVDB %s)", query, programmes[0].title, tvdb_id)
+                return programmes, tvdb_id, hit.title
+        return [], None, ""
+
     def tv_search(self, query: str, season: Optional[str] = None, ep: Optional[str] = None,
                   tvdb_id: Optional[int] = None, tvmaze_id: Optional[int] = None) -> list[Release]:
         """Sonarr ``t=tvsearch``: episodes (and a season pack) of the programme named ``query``.
@@ -170,6 +186,9 @@ class Indexer:
                 title = sonarr_title or query.strip() or programmes[0].title
         if not programmes and title:
             programmes = self._programmes(title) or self._programmes(query)
+        if not programmes and title:
+            programmes, known_id, tvdb_title = self._programmes_by_tvdb_title(query)
+            title = tvdb_title or title
         season_n = int(season) if season and season.isdigit() else None
         daily = None
         if season_n and season_n > 1900 and ep and "/" in ep:   # daily: season=2026, ep=11/02

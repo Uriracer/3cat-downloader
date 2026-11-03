@@ -23,11 +23,20 @@ log = logging.getLogger(__name__)
 
 TVMAZE = "https://api.tvmaze.com"
 SKYHOOK = "https://skyhook.sonarr.tv/v1/tvdb/shows/en"
+SKYHOOK_SEARCH = "https://skyhook.sonarr.tv/v1/tvdb/search/en/"
 CACHE_TTL = 24 * 3600.0
 FAILURE_TTL = 15 * 60.0
 _SLUG_RE = re.compile(r"(?:3cat\.cat/3cat|ccma\.cat/(?:tv3|3cat)(?:/alacarta)?)/([a-z0-9-]+)", re.I)
 
 Fetch = Callable[[str, dict], Optional[Any]]   # (url, params) -> parsed JSON, None when not found
+
+
+@dataclass
+class TvdbHit:
+    """One result of Sonarr's own title search (SkyHook)."""
+    tvdb_id: int
+    title: str                 # "Dirty Linen", "Genesis (2026)"
+    first_aired: str = ""      # "1999-04-19"
 
 
 @dataclass
@@ -54,6 +63,29 @@ class SeriesLookup:
         self._fetch = fetch or _default_fetch
         self._lock = threading.Lock()
         self._cache: dict[tuple[str, int], tuple[float, Optional[SeriesNames]]] = {}
+        self._searches: dict[str, tuple[float, list[TvdbHit]]] = {}
+
+    def search(self, title: str) -> list[TvdbHit]:
+        """TheTVDB series called ``title``, as Sonarr finds them (cached)."""
+        key = title.strip().lower()
+        if not key:
+            return []
+        now = time.monotonic()
+        with self._lock:
+            cached = self._searches.get(key)
+        if cached and now < cached[0]:
+            return cached[1]
+        try:
+            found = [TvdbHit(int(s["tvdbId"]), str(s.get("title") or ""), str(s.get("firstAired") or ""))
+                     for s in (self._fetch(SKYHOOK_SEARCH, {"term": title}) or [])
+                     if isinstance(s, dict) and s.get("tvdbId")]
+            expires = now + CACHE_TTL
+        except Exception as exc:
+            log.warning("No s'ha pogut consultar SkyHook (%s): %s", title, exc)
+            found, expires = [], now + FAILURE_TTL
+        with self._lock:
+            self._searches[key] = (expires, found)
+        return found
 
     def find(self, tvdb_id: Optional[int] = None, tvmaze_id: Optional[int] = None) -> Optional[SeriesNames]:
         """Names of a series by TheTVDB or TVmaze id (cached); None if unknown or offline."""

@@ -2,6 +2,16 @@
 
 Format basat en [Keep a Changelog](https://keepachangelog.com/ca/1.1.0/); versions [SemVer](https://semver.org/lang/ca/).
 
+## [0.3.2] - 2026-11-03
+
+### Corregit
+- La cerca per títol de Sonarr també troba les sèries que TheTVDB anomena en anglès: busca la
+  sèrie a TheTVDB amb el títol exacte i en fa servir el nom original (*Dirty Linen* és
+  *Plats bruts*). Funciona encara que Sonarr no hagi tornat a llegir què admet l'indexador.
+
+### Afegit
+- Cada cerca de Sonarr o Radarr queda als registres amb el nombre de resultats.
+
 ## [0.3.1] - 2026-11-02
 
 ### Corregit

@@ -78,11 +78,16 @@ Quan Sonarr o Radarr els han importat, demanen esborrar-los i 3Cat Downloader el
 - Sonarr busca primer per l'**identificador de TheTVDB**. 3Cat Downloader demana a TVmaze el
   nom original de la sèrie i busca a 3cat el programa amb aquest nom. Així troba les sèries
   que TheTVDB té amb el títol en anglès: *Genesis (2026)* a Sonarr és *Gènesi* a 3cat.
-- Si això no funciona, Sonarr busca pel títol. 3Cat Downloader només respon si hi ha un
-  programa de 3cat amb **exactament el mateix títol**, sense tenir en compte accents,
-  majúscules ni signes. Així no es baixa mai un programa equivocat.
-- Si tot i així no la troba, descarrega aquella sèrie des de la pàgina de 3Cat Downloader.
-  La cerca per identificador necessita que el servidor pugui accedir a `api.tvmaze.com`.
+- Quan Sonarr busca pel títol, 3Cat Downloader busca primer un programa de 3cat amb
+  **exactament el mateix títol**, sense tenir en compte accents, majúscules ni signes. Si no
+  n'hi ha cap, busca a TheTVDB les sèries amb aquest títol exacte, any inclòs, i en mira el
+  nom original. Per exemple, *Dirty Linen* és *Plats bruts*. Així no es baixa mai un
+  programa equivocat.
+- Les dues maneres necessiten que el servidor pugui accedir a `api.tvmaze.com` i
+  `skyhook.sonarr.tv`. Si tot i així no la troba, descarrega-la des de la pàgina de
+  3Cat Downloader.
+- Cada cerca de Sonarr queda als registres de 3Cat Downloader, amb el nombre de resultats:
+  `Newznab t=tvsearch q='Dirty Linen' … -> 14 resultats`.
 - Les temporades i els números de capítol són els de 3cat. Normalment coincideixen amb
   TheTVDB; si no, fes servir la cerca interactiva.
 - En una cerca de temporada surt també un **paquet de temporada** amb tots els capítols.
@@ -93,7 +98,7 @@ Quan Sonarr o Radarr els han importat, demanen esborrar-los i 3Cat Downloader el
 
 | Missatge | Solució |
 |---|---|
-| Una sèrie de 3cat no surt a la cerca | Si acabes d'actualitzar 3Cat Downloader, reinicia Sonarr perquè torni a llegir què admet l'indexador. Comprova que la sèrie de TheTVDB és la mateixa que la de 3cat (canal TV3, any). |
+| Una sèrie de 3cat no surt a la cerca | Mira els registres de 3Cat Downloader. Si no hi apareix cap línia `Newznab`, Sonarr no arriba a l'indexador. Si diu `No s'ha pogut consultar TVmaze`, el servidor no té accés a internet o al DNS. Si acabes d'actualitzar, reinicia Sonarr perquè torni a llegir què admet l'indexador. |
 | *Unable to connect* | Comprova que 3Cat Downloader està en mode servidor i que el host i el port són correctes. |
 | *API Key Incorrect* | Copia de nou la clau d'API des de Configuració. |
 | La importació no troba els fitxers | Sonarr no veu la carpeta al mateix camí. Fes servir la mateixa carpeta `/data` als dos contenidors, o configura un **Remote Path Mapping** a Sonarr. |
