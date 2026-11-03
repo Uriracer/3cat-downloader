@@ -36,7 +36,7 @@ RADARR = os.environ.get("RADARR_URL", "http://127.0.0.1:7878")
 RADARR_KEY = os.environ.get("RADARR_API_KEY", "e2e00000000000000000000000radarr")
 TV_ROOT = os.environ.get("E2E_TV_ROOT", "/data/media/tv")
 MOVIE_ROOT = os.environ.get("E2E_MOVIE_ROOT", "/data/media/movies")
-TIMEOUT = float(os.environ.get("E2E_TIMEOUT", "900"))
+TIMEOUT = float(os.environ.get("E2E_TIMEOUT", "600"))
 
 SERIES = {84710: "Dirty Linen (Plats bruts)", 71663: "The Simpsons (Els Simpson, manual)"}
 MOVIE = 319337   # 13 Minutes (13 minuts per matar Hitler)
@@ -127,6 +127,15 @@ class Arr:
         profiles = self.get("/api/v3/qualityprofile")
         return next((p["id"] for p in profiles if p["name"] == "Any"), profiles[0]["id"])
 
+    def releases(self, query: str) -> str:
+        """The releases an interactive search finds, with the reasons they are rejected."""
+        try:
+            found = call(self.base, self.key, "GET", f"/api/v3/release?{query}", timeout=180)
+        except Exception as exc:
+            return f"(cerca interactiva: {exc})"
+        return "; ".join(f"{r.get('title')} [{r.get('quality', {}).get('quality', {}).get('name')}, "
+                         f"{r.get('size')} B] -> {r.get('rejections') or 'acceptat'}" for r in found) or "cap resultat"
+
     def diagnostics(self) -> str:
         lines = [f"===== {self.name} ====="]
         for title, path in (("Cua", "/api/v3/queue?pageSize=20&includeUnknownSeriesItems=true&includeUnknownMovieItems=true"),
@@ -197,16 +206,20 @@ def main() -> int:
         sonarr.setup(TV_ROOT, "tv", [5030, 5040])
         radarr.setup(MOVIE_ROOT, "movies", [2030, 2040])
         tv_profile, movie_profile = sonarr.quality_profile(), radarr.quality_profile()
-        pending: dict[str, Callable[[], bool]] = {}
+        # label -> (has the file been imported?, what the interactive search says about the releases)
+        pending: dict[str, tuple[Callable[[], bool], Callable[[], str]]] = {}
         for tvdb_id, label in SERIES.items():
             episode_id = add_series(sonarr, tvdb_id, tv_profile)
-            pending[label] = (lambda eid=episode_id: sonarr.get(f"/api/v3/episode/{eid}")["hasFile"])
+            pending[label] = (lambda eid=episode_id: sonarr.get(f"/api/v3/episode/{eid}")["hasFile"],
+                              lambda eid=episode_id: sonarr.releases(f"episodeId={eid}"))
         movie_id = add_movie(radarr, movie_profile)
-        pending["13 Minutes (13 minuts per matar Hitler)"] = lambda: radarr.get(f"/api/v3/movie/{movie_id}")["hasFile"]
+        pending["13 Minutes (13 minuts per matar Hitler)"] = (
+            lambda: radarr.get(f"/api/v3/movie/{movie_id}")["hasFile"],
+            lambda: radarr.releases(f"movieId={movie_id}"))
 
         deadline = time.monotonic() + TIMEOUT
         while pending and time.monotonic() < deadline:
-            for label, done in list(pending.items()):
+            for label, (done, _releases) in list(pending.items()):
                 try:
                     if done():
                         log(f"IMPORTAT: {label}")
@@ -215,7 +228,8 @@ def main() -> int:
                     log(f"{label}: {exc}")
             time.sleep(5)
         if pending:
-            raise Fail("No s'han importat: " + ", ".join(pending))
+            why = "\n".join(f"{label}: {releases()}" for label, (_done, releases) in pending.items())
+            raise Fail("No s'han importat: " + ", ".join(pending) + "\n" + why)
     except Fail as exc:
         report = "\n\n".join(arr.diagnostics() for arr in (sonarr, radarr))
         print(report, flush=True)
