@@ -44,7 +44,7 @@ from typing import TYPE_CHECKING, Any, Callable, Optional
 
 import httpx
 
-from . import naming
+from . import metadata, naming
 from .config import QUALITIES, Settings, app_data_dir, atomic_write_json
 from .models import DownloadJob, Episode, JobStatus, MediaInfo, MediaSource, Subtitle
 
@@ -313,6 +313,8 @@ class DownloadManager:
         self._save_requested = False
         self._dirty = threading.Event()
         self._writer: Optional[threading.Thread] = None
+        #: Downloads a picture for the Jellyfin metadata (tests replace it).
+        self.fetch_image: Optional[metadata.FetchImage] = None
         self._load()
 
     # ------------------------------------------------------------------ lifecycle
@@ -855,6 +857,8 @@ class DownloadManager:
                 except OSError as exc:
                     log.warning("Cannot save subtitle %s: %s", final_path, exc)
                     _remove_quietly(tmp)
+            if settings.metadata_files and not job.target:   # Sonarr/Radarr write their own
+                self._write_metadata(ep, output, settings)
             self._cleanup(temps)
             self._release_dir(held_dir, remove_empty=False)
             held_dir = None
@@ -885,6 +889,21 @@ class DownloadManager:
             self._fail(job_id, control, failure, temps)
         else:
             self._on_interrupted(job_id, control, temps)
+
+    def _write_metadata(self, ep: Episode, output: str, settings: Settings) -> None:
+        """``.nfo`` files and pictures for Jellyfin; a problem never fails the download."""
+        try:
+            folder = naming.series_dir(settings.download_dir, ep, settings.filename_template)
+            program = None
+            if folder and ep.program_id and not all(
+                    os.path.exists(os.path.join(folder, name))
+                    for name in (metadata.SERIES_NFO, metadata.SERIES_POSTER)):
+                get_program = getattr(self._client, "get_program", None)
+                program = get_program(ep.program_id) if callable(get_program) else None
+            metadata.write_episode_metadata(output, ep, series_dir=folder, program=program,
+                                            fetch_image=self.fetch_image)
+        except Exception as exc:
+            log.warning("No s'han pogut desar les metadades de %s: %s", output, exc)
 
     def _claim_output(self, job_id: str, ep: Episode, output: str) -> str:
         """Reserve ``output`` for this job, or a ``[<id>]`` variant if it is taken.

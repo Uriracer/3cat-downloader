@@ -159,7 +159,7 @@ class SeriesLookup:
         self._entries: dict[str, list[Any]] = self._load()     # key -> [expires (unix time), value]
         self._failures: dict[str, float] = {}                  # key -> retry after (monotonic)
         self._background = background
-        self._pending: "queue.Queue[str]" = queue.Queue()
+        self._pending: "queue.Queue[tuple[str, Callable[[], Any]]]" = queue.Queue()
         self._queued: set[str] = set()
         self._worker: Optional[threading.Thread] = None
 
@@ -251,7 +251,9 @@ class SeriesLookup:
         else:
             show = self._fetch(f"{TVMAZE}/lookup/shows", {"thetvdb": tvdb_id})
         if not isinstance(show, dict):
-            return None
+            if not tvdb_id:
+                return None
+            show = {}       # not on TVmaze: TheTVDB (SkyHook) may still know it (manual correspondences)
         info = SeriesNames(tvmaze_id=show.get("id") or tvmaze_id,
                            tvdb_id=tvdb_id or (show.get("externals") or {}).get("thetvdb"))
         names = [show.get("name") or ""]
@@ -275,6 +277,8 @@ class SeriesLookup:
             except Exception as exc:
                 log.debug("SkyHook %s: %s", info.tvdb_id, exc)
         info.names = _unique(names)
+        if not (info.names or info.sonarr_title or info.episodes):
+            return None
         return asdict(info)
 
     def programme_series(self, name: str) -> Optional[SeriesNames]:
@@ -288,13 +292,22 @@ class SeriesLookup:
         """Like :meth:`programme_series`, without waiting: unknown names are resolved in the background."""
         found, tvdb_id = self.peek(f"prog:{normalize(name)}")
         if found:
-            if not tvdb_id:
-                return None
-            ok, value = self.peek(f"tvdb:{tvdb_id}")
-            if ok:
-                return SeriesNames(**value) if value else None
-        self._enqueue(name)
+            return self.find_cached(tvdb_id) if tvdb_id else None
+        self._enqueue(f"prog:{normalize(name)}", lambda: self._resolve_programme(name))
         return None
+
+    def find_cached(self, tvdb_id: int) -> Optional[SeriesNames]:
+        """Like :meth:`find`, without waiting: an unknown id is fetched in the background."""
+        ok, value = self.peek(f"tvdb:{tvdb_id}")
+        if ok:
+            return SeriesNames(**value) if value else None
+        self._enqueue(f"tvdb:{tvdb_id}", lambda: self.find(tvdb_id=tvdb_id))
+        return None
+
+    def _resolve_programme(self, name: str) -> None:
+        info = self.programme_series(name)
+        if info:
+            log.info("«%s» és «%s» a TheTVDB (%s)", name, info.sonarr_title, info.tvdb_id)
 
     def _programme_tvdb(self, name: str) -> Optional[int]:
         wanted = normalize(name)
@@ -309,23 +322,23 @@ class SeriesLookup:
                 return int(tvdb_id)
         return None
 
-    def _enqueue(self, name: str) -> None:
+    def _enqueue(self, key: str, job: Callable[[], Any]) -> None:
+        """Run ``job`` (which fills the cache entry ``key``) in the background thread."""
         if not self._background:
             return
-        key = normalize(name)
         with self._lock:
-            if key in self._queued or self._failures.get(f"prog:{key}", 0.0) > time.monotonic():
+            if key in self._queued or self._failures.get(key, 0.0) > time.monotonic():
                 return
             self._queued.add(key)
             if self._worker is None or not self._worker.is_alive():
                 self._worker = threading.Thread(target=self._work, name="arr-metadata", daemon=True)
                 self._worker.start()
-        self._pending.put(name)
+        self._pending.put((key, job))
 
     def _work(self) -> None:
         while True:
             try:
-                name = self._pending.get(timeout=30)
+                key, job = self._pending.get(timeout=30)
             except queue.Empty:
                 with self._lock:
                     if self._pending.empty():
@@ -333,14 +346,12 @@ class SeriesLookup:
                         return
                 continue
             try:
-                info = self.programme_series(name)
-                if info:
-                    log.info("«%s» és «%s» a TheTVDB (%s)", name, info.sonarr_title, info.tvdb_id)
+                job()
             except Exception as exc:   # never kill the worker
-                log.debug("Background lookup %s: %s", name, exc)
+                log.debug("Background lookup %s: %s", key, exc)
             finally:
                 with self._lock:
-                    self._queued.discard(normalize(name))
+                    self._queued.discard(key)
 
     def wait_idle(self, timeout: float = 30.0) -> None:
         """Wait for the background lookups (tests)."""
@@ -362,6 +373,14 @@ class SeriesLookup:
         _ok, value = self._cached(key, SEARCH_TTL, lambda: self._movie(url), miss_ttl=FAILURE_TTL * 4,
                                   service="Radarr")
         return MovieNames(**value) if value else None
+
+    def movie_cached(self, tmdb_id: int) -> Optional[MovieNames]:
+        """Like :meth:`movie`, without waiting: an unknown id is fetched in the background."""
+        ok, value = self.peek(f"movie:tmdb:{tmdb_id}")
+        if ok:
+            return MovieNames(**value) if value else None
+        self._enqueue(f"movie:tmdb:{tmdb_id}", lambda: self.movie(tmdb_id=tmdb_id))
+        return None
 
     def _movie(self, url: str) -> Optional[dict]:
         data = self._fetch(url, {})

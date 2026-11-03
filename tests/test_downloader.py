@@ -232,6 +232,8 @@ def test_lifecycle_completes(make_manager, settings: Settings) -> None:
         assert done.progress == 100.0 and done.finished_at and done.error is None
         expected = episode_path(settings.download_dir, job.episode)
         assert done.output_path == expected and os.path.getsize(expected) > 2000
+        # The final event is emitted right after the state is published: wait for it.
+        assert wait_for(lambda: (job.id, JobStatus.COMPLETED) in events)
         with lock:
             seq = [s for i, s in events if i == job.id]
         # Emissions carry the job's *current* state, so under load an intermediate

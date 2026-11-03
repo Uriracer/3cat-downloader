@@ -166,6 +166,8 @@
           <div class="checks">
             <label class="check"><input type="checkbox" id="set-skip-existing" name="skip_existing">
               <span>Ometre els capítols que ja s'han descarregat</span></label>
+            <label class="check"><input type="checkbox" id="set-metadata-files" name="metadata_files">
+              <span>Desar la informació per a Jellyfin (fitxers <code>.nfo</code> i imatges)</span></label>
           </div>
         </fieldset>
 
@@ -223,6 +225,35 @@
           <button type="button" id="settings-discard" class="btn" disabled>Desfés els canvis</button>
           <button type="submit" id="settings-save" class="btn btn-primary" disabled>Desa la configuració</button>
         </div>
+      </form>
+
+      <form id="mappings-form" class="settings" hidden novalidate>
+        <fieldset class="card">
+          <legend>Correspondències amb TheTVDB i TMDB</legend>
+          <p class="help">Sonarr i Radarr busquen pel nom de TheTVDB o TMDB. Normalment 3Cat Downloader troba
+            sol el nom català, però si un programa no surt (per exemple, una sèrie doblada), digues-li aquí
+            quina sèrie o pel·lícula és.</p>
+          <ul id="mappings-list" class="mappings-list" aria-live="polite"></ul>
+          <div class="grid-2">
+            <div>
+              <label for="map-kind">Tipus</label>
+              <select id="map-kind">
+                <option value="series">Sèrie (TheTVDB, Sonarr)</option>
+                <option value="movie">Pel·lícula (TMDB, Radarr)</option>
+              </select>
+            </div>
+            <div>
+              <label for="map-title">Nom a 3cat</label>
+              <input id="map-title" type="text" maxlength="200" placeholder="El xai Shaun" spellcheck="false">
+            </div>
+          </div>
+          <label for="map-query" id="map-query-label">Nom a TheTVDB (en anglès) o identificador</label>
+          <div class="field-row">
+            <input id="map-query" type="search" maxlength="200" placeholder="Shaun the Sheep" spellcheck="false">
+            <button type="submit" id="map-search" class="btn">Cerca</button>
+          </div>
+          <ul id="map-results" class="mappings-list" aria-live="polite"></ul>
+        </fieldset>
       </form>
 
       <form id="password-form" class="settings" hidden novalidate>

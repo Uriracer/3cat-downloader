@@ -50,6 +50,8 @@ class Settings:
     embed_subtitles: bool = False
     audio_description: bool = False
     skip_existing: bool = True
+    #: .nfo and pictures for Jellyfin next to the videos (see tresdl/metadata.py).
+    metadata_files: bool = True
     filename_template: str = DEFAULT_TEMPLATE
     server_port: int = 8765
     api_key: str = field(default_factory=_new_api_key)  # for future *arr integration

@@ -21,6 +21,21 @@ A Linux, canvia `.venv\Scripts\python.exe` per `.venv/bin/python`.
 Algunes proves de desplegament fan servir `bash`, `shellcheck` i `pyyaml`:
 `pip install shellcheck-py pyyaml`.
 
+### Prova amb Sonarr i Radarr reals
+
+El workflow [e2e.yml](../.github/workflows/e2e.yml) aixeca la imatge de Docker, Sonarr i
+Radarr ([tests/e2e/docker-compose.yml](../tests/e2e/docker-compose.yml)) i els configura com
+diu la guia: indexador, client de descàrrega i una correspondència manual. Després comprova
+que Sonarr i Radarr troben, descarreguen i **importen** *Dirty Linen* (*Plats bruts*), *The
+Simpsons* (*Els Simpson*, per correspondència manual) i *13 Minutes* (*13 minuts per matar
+Hitler*).
+
+Com que 3cat només és accessible des d'Espanya, [fake3cat.py](../tests/e2e/fake3cat.py)
+executa el servidor real amb un catàleg fix i un vídeo generat amb ffmpeg. TVmaze, TheTVDB i
+TMDB sí que són els reals. El workflow s'executa amb cada canvi a `tresdl/` i cada setmana,
+per detectar versions noves de Sonarr i Radarr. Si falla, l'anotació de l'error porta la cua,
+l'historial i el registre de Sonarr i Radarr.
+
 ## Estructura
 
 ```

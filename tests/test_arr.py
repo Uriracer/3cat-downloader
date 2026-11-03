@@ -15,6 +15,7 @@ from test_server import FakeStore, FakeSettings  # tests/ is on sys.path
 from tresdl import server
 from tresdl.arr import releases as rl
 from tresdl.arr.indexer import Indexer, normalize, split_year
+from tresdl.arr.mappings import Mapping, MappingStore
 from tresdl.models import DownloadJob, Episode, JobStatus, MediaInfo, MediaSource, Program
 
 KEY = "clau-sonarr"
@@ -36,6 +37,8 @@ GENESI = [ep(20 + n, 1, n, f"Capítol {n}", program_id=76716, series="Gènesi", 
 TN = [ep(10, None, None, "Telenotícies migdia", program_id=777, series="Telenotícies", date="2026-11-02")]
 PLATS = [ep(30 + n, 1, n, f"Tinc {n}", program_id=126706100, series="Plats bruts", date=f"1999-04-{n:02d}")
          for n in (1, 2, 3, 4)]          # 3cat: one season of 4; TheTVDB: two seasons of 2
+SHAUN = [ep(60 + n, 1, n, f"Capítol {n}", program_id=555, series="El xai Shaun", date=f"2007-03-0{n}")
+         for n in (1, 2)]   # TheTVDB "Shaun the Sheep": TVmaze has no Catalan name, needs a manual mapping
 FILMS = [Episode(id=50, program_id=0, program_title="Monster house", title="Monster house",
                  raw_title="Monster house", air_date="2026-10-24", duration_seconds=5175),
          Episode(id=51, program_id=0, program_title="13 minuts per matar Hitler",
@@ -49,9 +52,11 @@ class Client:
                          Program(id=76716, slug="genesi", title="Gènesi"),
                          Program(id=126706100, slug="plats-bruts", title="Plats bruts"),
                          Program(id=99, slug="merli-sapere-aude", title="Merlí. Sapere aude"),
-                         Program(id=777, slug="telenoticies", title="Telenotícies")]
+                         Program(id=777, slug="telenoticies", title="Telenotícies"),
+                         Program(id=555, slug="el-xai-shaun", title="El xai Shaun")]
         self.episodes = {54076: MERLI, 76716: GENESI, 126706100: PLATS, 99: [ep(90, 1, 1, "Altres", program_id=99, series="Merlí. Sapere aude")],
-                         777: TN}
+                         777: TN, 555: SHAUN}
+        self.recent = MERLI[:1] + TN + GENESI[:1]
 
     def search(self, query: str, limit: int = 30) -> list[Program]:
         return [p for p in self.programs if normalize(query).split()[0] in normalize(p.title)][:limit]
@@ -67,10 +72,10 @@ class Client:
         return copy.deepcopy(FILMS)
 
     def recent_episodes(self, limit: int = 200) -> list[Episode]:
-        return copy.deepcopy(MERLI[:1] + TN + GENESI[:1])
+        return copy.deepcopy(self.recent)
 
     def get_episode(self, video_id: int) -> Episode:
-        for e in MERLI + GENESI + PLATS + TN + FILMS:
+        for e in MERLI + GENESI + PLATS + TN + SHAUN + FILMS:
             if e.id == video_id:
                 return copy.deepcopy(e)
         raise LookupError(video_id)
@@ -149,6 +154,18 @@ TVMAZE = {   # what TVmaze / SkyHook answer, keyed by URL
         "Translations": [{"Title": "13 minuts per matar Hitler", "Language": "ca"}]}],
     "https://api.radarr.video/v1/search?q=13 Minutes&year=2015": [
         {"TmdbId": 319337, "Title": "13 Minutes", "Year": 2015}],
+    "https://api.radarr.video/v1/search?q=13 Minutes": [{"TmdbId": 319337, "Title": "13 Minutes", "Year": 2015}],
+    "https://api.radarr.video/v1/movie/999": {"TmdbId": 999, "Title": "Thirteen", "OriginalTitle": "Thirteen",
+                                              "Year": 2015},
+    "https://api.tvmaze.com/lookup/shows?thetvdb=81838": {
+        "id": 3250, "name": "Shaun the Sheep", "officialSite": None, "externals": {"thetvdb": 81838}},
+    "https://api.tvmaze.com/shows/3250/akas": [],
+    "https://skyhook.sonarr.tv/v1/tvdb/shows/en/81838": {"title": "Shaun the Sheep", "episodes": [
+        {"seasonNumber": 1, "episodeNumber": n, "airDate": f"2007-03-0{n}"} for n in (1, 2)]},
+    "https://skyhook.sonarr.tv/v1/tvdb/search/en/?term=Shaun the Sheep": [
+        {"tvdbId": 81838, "title": "Shaun the Sheep", "firstAired": "2007-03-05"}],
+    "https://skyhook.sonarr.tv/v1/tvdb/shows/en/77777": {"title": "Only On TheTVDB", "episodes": [
+        {"seasonNumber": 1, "episodeNumber": 1, "airDate": "2007-03-01"}]},        # not on TVmaze
     "https://api.tvmaze.com/lookup/shows?thetvdb=82712": {"id": 1, "name": "Genesis", "officialSite": ""},
     "https://api.tvmaze.com/shows/1/akas": [],
     "https://skyhook.sonarr.tv/v1/tvdb/shows/en/82712": {"title": "Genesis (2005)"},
@@ -180,7 +197,7 @@ def arr(tmp_path: Path):
     web.mkdir()
     app = server.create_app(client, manager, store, web_dir=web, arr_data_dir=tmp_path / "data")
     with TestClient(app, base_url=BASE) as http:
-        yield {"http": http, "manager": manager, "tmp": tmp_path, "app": app}
+        yield {"http": http, "manager": manager, "tmp": tmp_path, "app": app, "client": client}
 
 
 def items(xml_text: str) -> list[dict]:
@@ -372,6 +389,86 @@ def test_movie_search_by_id_and_tmdb_title(arr) -> None:
     assert [(f["title"], f["tmdbid"], f["imdb"]) for f in by_title] == want
     assert items(newznab(http, t="search", q="13 Minutes 1999", cat="2000")) == []   # wrong year
     assert items(newznab(http, t="movie", tmdbid="1", cat="2000")) == []             # unknown film
+
+
+# --------------------------------------------------------------------------- manual mappings
+
+def test_mapping_store(tmp_path: Path) -> None:
+    store = MappingStore(tmp_path)
+    store.add(Mapping("series", "El xai Shaun", 81838, "Shaun the Sheep"))
+    store.add(Mapping("series", "el xai shaun", 77777))                 # same 3cat name: replaced
+    store.add(Mapping("movie", "Ja t'enyoro", 290762))
+    assert store.remote_id("series", "El Xai Shaun") == 77777 and store.remote_id("movie", "El xai Shaun") is None
+    assert store.titles("series", 77777) == ["el xai shaun"] and store.titles("series", None) == []
+    again = MappingStore(tmp_path)                                       # persisted
+    assert [(m.kind, m.remote_id) for m in again.all()] == [("movie", 290762), ("series", 77777)]
+    assert again.remove("movie", "JA T'ENYORO") and not again.remove("movie", "Ja t'enyoro")
+    (tmp_path / "arr_mappings.json").write_text("{trencat", encoding="utf-8")
+    assert MappingStore(tmp_path).all() == []                            # unreadable: no mappings, no crash
+
+
+def test_manual_series_mapping(arr) -> None:
+    """"El xai Shaun" is "Shaun the Sheep" on TheTVDB: only a manual mapping finds it."""
+    http = arr["http"]
+    assert items(newznab(http, t="tvsearch", tvdbid="81838", season="1", ep="1")) == []
+    r = http.post("/api/arr/mappings", json={"kind": "series", "title": "el xai shaun", "remote_id": 81838})
+    assert r.status_code == 200, r.text
+    assert r.json() == {"kind": "series", "title": "El xai Shaun", "remote_id": 81838,
+                        "remote_title": "Shaun the Sheep"}
+    found = items(newznab(http, t="tvsearch", tvdbid="81838", season="1", ep="1"))
+    assert [(f["title"], f["tvdbid"]) for f in found] == [
+        ("Shaun.the.Sheep.S01E01.CATALAN.1080p.WEB-DL.AAC.H264-3CAT", "81838")]
+    assert len(items(newznab(http, t="tvsearch", q="Shaun the Sheep", season="1"))) == 3   # by title: pack + 2
+    assert http.get("/api/arr/mappings").json()["mappings"][0]["title"] == "El xai Shaun"
+    assert (arr["tmp"] / "data" / "arr_mappings.json").is_file()
+
+    gone = http.delete("/api/arr/mappings", params={"kind": "series", "title": "El xai Shaun"})
+    assert gone.json() == {"ok": True}
+    assert items(newznab(http, t="tvsearch", tvdbid="81838", season="1", ep="1")) == []
+    assert http.delete("/api/arr/mappings", params={"kind": "series", "title": "El xai Shaun"}).status_code == 404
+
+
+def test_manual_mapping_errors(arr) -> None:
+    http = arr["http"]
+    wrong_name = http.post("/api/arr/mappings", json={"kind": "series", "title": "Xai", "remote_id": 81838})
+    assert wrong_name.status_code == 404 and "«El xai Shaun»" in wrong_name.json()["detail"]   # suggestion
+    unknown_id = http.post("/api/arr/mappings", json={"kind": "series", "title": "El xai Shaun", "remote_id": 5})
+    assert unknown_id.status_code == 404 and "TheTVDB" in unknown_id.json()["detail"]
+    assert http.post("/api/arr/mappings", json={"kind": "anime", "title": "x", "remote_id": 1}).status_code == 422
+    assert http.post("/api/arr/mappings", json={"kind": "movie", "title": "", "remote_id": 1}).status_code == 422
+    assert http.get("/api/arr/mappings").json() == {"mappings": []}
+
+
+def test_manual_mapping_without_tvmaze_and_in_rss(arr) -> None:
+    """A series TVmaze doesn't know (SkyHook only); new episodes carry its TheTVDB id."""
+    http = arr["http"]
+    r = http.post("/api/arr/mappings", json={"kind": "series", "title": "El xai Shaun", "remote_id": 77777})
+    assert r.json()["remote_title"] == "Only On TheTVDB"
+    found = items(newznab(http, t="tvsearch", tvdbid="77777", season="1", ep="1"))
+    assert [f["title"] for f in found] == ["Only.On.TheTVDB.S01E01.CATALAN.1080p.WEB-DL.AAC.H264-3CAT"]
+    arr["client"].recent = SHAUN[:1]
+    feed = items(newznab(http, t="tvsearch", cat="5030,5040"))
+    assert [(f["title"].split(".CATALAN")[0], f["tvdbid"]) for f in feed] == [("Only.On.TheTVDB.S01E01", "77777")]
+
+
+def test_manual_movie_mapping(arr) -> None:
+    http = arr["http"]
+    assert items(newznab(http, t="movie", tmdbid="999", cat="2000")) == []
+    r = http.post("/api/arr/mappings", json={"kind": "movie", "title": "13 minuts per matar hitler", "remote_id": 999})
+    assert r.json()["title"] == "13 minuts per matar Hitler" and r.json()["remote_title"] == "Thirteen (2015)"
+    found = items(newznab(http, t="movie", tmdbid="999", cat="2000"))
+    assert [(f["title"], f["tmdbid"]) for f in found] == [("Thirteen.2015.CATALAN.1080p.WEB-DL.AAC.H264-3CAT", "999")]
+    rss = {f["title"].split(".CATALAN")[0]: f for f in items(newznab(http, t="movie", cat="2000"))}
+    assert rss["Thirteen.2015"]["tmdbid"] == "999" and "Monster.house" in rss
+
+
+def test_remote_lookup(arr) -> None:
+    http = arr["http"]
+    series = http.get("/api/arr/lookup", params={"kind": "series", "q": "Genesis"}).json()["results"]
+    assert [(s["id"], s["year"]) for s in series] == [(480821, "2026"), (82712, "2005")]
+    movies = http.get("/api/arr/lookup", params={"kind": "movie", "q": "13 Minutes"}).json()["results"]
+    assert movies == [{"id": 319337, "title": "13 Minutes", "year": "2015"}]
+    assert http.get("/api/arr/lookup", params={"kind": "movie", "q": " "}).json() == {"results": []}
 
 
 def test_nzb_endpoint(arr) -> None:

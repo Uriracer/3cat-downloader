@@ -656,3 +656,9 @@ input:disabled, input[readonly].is-locked { opacity: .75; cursor: not-allowed; }
 .arr-list { display: grid; grid-template-columns: max-content 1fr; gap: 4px 12px; margin: 0; font-size: .9rem; }
 .arr-list dt { color: var(--muted); }
 .arr-list dd { margin: 0; overflow-wrap: anywhere; }
+
+/* Manual correspondences (settings) */
+.mappings-list { list-style: none; margin: 0 0 12px; padding: 0; display: grid; gap: 6px; }
+.mappings-list:empty { display: none; }
+.mappings-list li { display: flex; align-items: center; gap: 10px; justify-content: space-between; flex-wrap: wrap; }
+.mappings-list .mapping-text { min-width: 0; overflow-wrap: anywhere; }

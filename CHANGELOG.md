@@ -2,6 +2,23 @@
 
 Format basat en [Keep a Changelog](https://keepachangelog.com/ca/1.1.0/); versions [SemVer](https://semver.org/lang/ca/).
 
+## [0.5.0] - 2026-11-03
+
+### Afegit
+- **Correspondències manuals** amb TheTVDB i TMDB, a Configuració. Serveixen per a les sèries
+  i pel·lícules que no es troben soles, com les doblades (*El xai Shaun* és *Shaun the
+  Sheep*). Sonarr i Radarr les fan servir a les cerques i a la llista de novetats.
+- **Informació per a Jellyfin**: les descàrregues fetes des de la pàgina porten un `.nfo` i la
+  imatge de cada capítol, i `tvshow.nfo` i `poster.jpg` a la carpeta de la sèrie. Es pot
+  desactivar a Configuració.
+- **Prova amb Sonarr i Radarr reals** a GitHub Actions: busquen, descarreguen i importen
+  sèries i una pel·lícula de 3Cat Downloader.
+
+### Documentat
+- Radarr només accepta, per defecte, pel·lícules en l'idioma original: cal posar **Any** a
+  l'idioma del perfil perquè baixi les pel·lícules doblades de 3cat (ho ha trobat la prova
+  amb Radarr real).
+
 ## [0.4.0] - 2026-11-03
 
 ### Afegit
