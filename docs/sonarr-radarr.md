@@ -64,6 +64,16 @@ Prem **Test** i desa.
 Els fitxers es desen a `<carpeta de descàrregues>/tv/<nom del llançament>/` (o `movies/`).
 Quan Sonarr o Radarr els han importat, demanen esborrar-los i 3Cat Downloader els elimina.
 
+### Radarr: l'idioma del perfil
+
+Els perfils de qualitat de Radarr, per defecte, només accepten pel·lícules en l'**idioma
+original**, i les pel·lícules de 3cat solen estar doblades al català. Sense aquest canvi,
+Radarr les troba però no les baixa (a la cerca interactiva diu *Original Language (German)
+is wanted, but found Catalan*).
+
+A Radarr, ves a **Settings → Profiles**, obre el perfil que fas servir i, a **Language**, tria
+**Any** (o **Catalan**). Desa. A Sonarr no cal: no filtra per idioma.
+
 ## 3. Comprovar-ho
 
 1. A Sonarr, afegeix una sèrie que sigui a 3cat, per exemple *Merlí* o *Polseres vermelles*.
@@ -142,6 +152,7 @@ Les correspondències es desen a `arr_mappings.json`, a la carpeta de configurac
 | Missatge | Solució |
 |---|---|
 | Una sèrie o pel·lícula de 3cat no surt a la cerca | Mira els registres de 3Cat Downloader. Si no hi apareix cap línia `Newznab`, Sonarr o Radarr no arriben a l'indexador. Si diu `No s'ha pogut consultar …`, el servidor no té accés a internet o al DNS. Si acabes d'actualitzar, reinicia Sonarr i Radarr perquè tornin a llegir què admet l'indexador. |
+| Radarr troba la pel·lícula però no la baixa: *Original Language … is wanted, but found Catalan* | Canvia l'idioma del perfil a **Any**: vegeu [Radarr: l'idioma del perfil](#radarr-lidioma-del-perfil). |
 | Una sèrie doblada (o amb un nom molt diferent) no surt mai | Afegeix-ne la correspondència a mà: vegeu [Quan no la troba sola](#quan-no-la-troba-sola-correspondències-manuals). |
 | Sonarr baixa un capítol amb un número equivocat | La numeració de 3cat i la de TheTVDB no es corresponen i no s'han pogut fer coincidir. Fes servir la cerca interactiva i tria'l a mà. |
 | *Unable to connect* | Comprova que 3Cat Downloader està en mode servidor i que el host i el port són correctes. |

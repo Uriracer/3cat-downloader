@@ -14,6 +14,11 @@ Format basat en [Keep a Changelog](https://keepachangelog.com/ca/1.1.0/); versio
 - **Prova amb Sonarr i Radarr reals** a GitHub Actions: busquen, descarreguen i importen
   sèries i una pel·lícula de 3Cat Downloader.
 
+### Documentat
+- Radarr només accepta, per defecte, pel·lícules en l'idioma original: cal posar **Any** a
+  l'idioma del perfil perquè baixi les pel·lícules doblades de 3cat (ho ha trobat la prova
+  amb Radarr real).
+
 ## [0.4.0] - 2026-11-03
 
 ### Afegit

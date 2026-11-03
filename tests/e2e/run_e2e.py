@@ -125,7 +125,11 @@ class Arr:
 
     def quality_profile(self) -> int:
         profiles = self.get("/api/v3/qualityprofile")
-        return next((p["id"] for p in profiles if p["name"] == "Any"), profiles[0]["id"])
+        profile = next((p for p in profiles if p["name"] == "Any"), profiles[0])
+        if "language" in profile:   # Radarr: "Original" by default, 3cat films are dubbed (docs/sonarr-radarr.md)
+            profile["language"] = {"id": -1, "name": "Any"}
+            self.put(f"/api/v3/qualityprofile/{profile['id']}", profile)
+        return profile["id"]
 
     def releases(self, query: str) -> str:
         """The releases an interactive search finds, with the reasons they are rejected."""
