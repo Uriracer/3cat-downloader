@@ -234,10 +234,13 @@ def test_lifecycle_completes(make_manager, settings: Settings) -> None:
         assert done.output_path == expected and os.path.getsize(expected) > 2000
         with lock:
             seq = [s for i, s in events if i == job.id]
+        # Emissions carry the job's *current* state, so under load an intermediate
+        # state can be skipped; what arrives must still follow the lifecycle order.
         order = [JobStatus.QUEUED, JobStatus.RESOLVING, JobStatus.DOWNLOADING,
                  JobStatus.POSTPROCESSING, JobStatus.COMPLETED]
-        positions = [seq.index(s) for s in order]
-        assert positions == sorted(positions), seq
+        ranks = [order.index(s) for s in seq]
+        assert ranks == sorted(ranks), seq
+        assert seq[-1] == JobStatus.COMPLETED, seq
     assert temp_files(Path(settings.download_dir)) == []
 
 
