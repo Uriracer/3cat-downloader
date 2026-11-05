@@ -706,7 +706,10 @@ def test_raising_max_parallel_applies_to_queued_work(make_manager, settings: Set
         mgr.cancel(j.id)
 
 
-def test_retry_then_cancel_at_end_of_run_really_cancels(make_manager) -> None:
+def test_retry_then_cancel_at_end_of_run_really_cancels(make_manager, settings: Settings) -> None:
+    # One worker: with two, the idle one may pick up the re-queued job before
+    # cancel() and the cancel is then (correctly) applied asynchronously.
+    settings.max_parallel = 1
     client = FakeClient({1: RuntimeError("boom")})
     mgr = make_manager(client)
     install_fake_ytdlp(mgr)
